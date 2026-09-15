@@ -34,6 +34,7 @@ class Market(Enum):
     A_ETF = "CN-ETF"    # A股ETF
     HK = "HK-Stock"          # H股/港股
     US = "US-Stock"          # 美股
+    KR = "KR-Stock"          # 韩股/KOSPI
     CSI300 = "CSI300"        # 沪深300
     CSI500 = "CSI500"        # 中证500
     CSI1000 = "CSI1000"      # 中证1000
@@ -73,6 +74,15 @@ class USStockTradingConfig(TradingCostConfig):
     slippage_mode: str = "percentage"    # "percentage" 或 "fixed"
     slippage_fixed: float = 0.01         # 固定滑点金额 ($0.01)
     min_shares: int = 1                  # 最小交易单位 1股
+
+@dataclass
+class KRStockTradingConfig(TradingCostConfig):
+    """韩股(KOSPI)交易成本配置 — 수치는 market_config_kr.yaml에서, 잠정치는 팀 확인 대상"""
+    commission_rate: float = 0.00015       # 위탁수수료 (양방향, 온라인 증권사 수준)
+    transaction_tax_rate: float = 0.0015   # 매도 시 증권거래세+농특세 (KOSPI 2025 기준 0.15%)
+    slippage_rate: float = 0.001           # 슬리피지 0.1%
+    min_shares: int = 1                    # 최소 거래 단위 1주
+
 
 @dataclass
 class HKStockTradingConfig(TradingCostConfig):
@@ -147,6 +157,15 @@ class MarketManagerConfig:
                     slippage_rate=cost_config.get('slippage_rate', 0.001),
                     slippage_mode=cost_config.get('slippage_mode', 'percentage'),
                     slippage_fixed=cost_config.get('slippage_fixed', 0.01),
+                    min_shares=cost_config.get('min_shares', 1)
+                )
+            elif config_type == 'kr_stock':
+                trading_configs[market_name] = KRStockTradingConfig(
+                    commission_rate=cost_config.get('commission_rate', 0.00015),
+                    transaction_tax_rate=cost_config.get('transaction_tax_rate', 0.0015),
+                    slippage_rate=cost_config.get('slippage_rate', 0.001),
+                    slippage_mode=cost_config.get('slippage_mode', 'percentage'),
+                    slippage_fixed=cost_config.get('slippage_fixed', 10.0),
                     min_shares=cost_config.get('min_shares', 1)
                 )
             elif config_type == 'hk_stock':
@@ -289,6 +308,7 @@ class MarketManager:
             Market.A_ETF: ("CN-ETF", "All symbols in Chinese mainland ETF market. ~300+ A-share ETFs", ["510300.SH", "159919.SZ", "512880.SH"]),
             Market.HK: ("HK-Stock", "All symbols in Hong Kong stock market. ~2000+ HK stocks", ["00700.HK", "09988.HK", "01299.HK"]),
             Market.US: ("US-Stock", "All symbols in US stock market. ~8000+ US stocks", ["AAPL", "MSFT", "GOOGL"]),
+            Market.KR: ("KR-Stock", "Korean stock market (KOSPI). Symbols are 6-digit codes.", ["005930", "000660", "035420"]),
             Market.CSI300: ("CSI300", "沪深300指数成分股，包含沪深两市最具代表性的300只大盘蓝筹股。", []),
             Market.CSI500: ("CSI500", "中证500指数成分股，包含沪深两市最具代表性的500只中小盘股。", []),
             Market.CSI1000: ("CSI1000", "中证1000指数成分股，包含沪深两市最具代表性的1000只中小盘股。", []),
@@ -458,6 +478,19 @@ class MarketManager:
             df = df[~(df["delist_date"] < target_date)]
             df = df.dropna(subset=["ts_code", "list_date"])
             df['name'] = df['ts_code']
+        elif market == Market.KR:
+            # KR 전체 상장 목록은 point-in-time 유니버스(D13) 확정 후 지원.
+            # 그 전까지는 full_market 요청에도 custom_symbols를 반환한다
+            # (생존편향 방지: 현재 시점 전체 목록을 과거 재생에 쓰지 않게 함).
+            symbols = self.custom_symbols_by_market.get("KR-Stock", [])
+            if not symbols:
+                raise ValueError(
+                    "KR-Stock requires custom_symbols until the point-in-time "
+                    "KOSPI200 table (D13) is built."
+                )
+            return pd.DataFrame(
+                [{"ts_code": s, "name": s, "market": "KR-Stock"} for s in symbols]
+            )
         else:
             raise ValueError(f"Invalid market: {market}")
         return df
@@ -537,6 +570,10 @@ class MarketManager:
                 func_kwargs={
                 }
             )
+        elif market_name == "KR-Stock":
+            from datetime import datetime as _dt
+            from utils.kr_data_utils import GLOBAL_KR_CLIENT
+            return GLOBAL_KR_CLIENT.get_trade_dates("2024-01-01", _dt.now().strftime("%Y-%m-%d"))
         else:
             raise ValueError(f"Invalid market: {market_name}")
         trade_date = trade_date[trade_date["is_open"] == 1]["cal_date"].values.tolist()
@@ -600,6 +637,34 @@ class MarketManager:
             return None
         elif market_name == "HK-Stock":
             return None
+        elif market_name == "KR-Stock":
+            # ⚠️ SCORING-ONLY (D22 §5-0): returns the FULL day's OHLCV for the
+            # given date regardless of intraday time. Calling this from a
+            # decision-time path leaks same-day close (look-ahead). Decision
+            # paths must use previous-trading-day data via kr_data_utils.
+            from utils.kr_data_utils import GLOBAL_KR_CLIENT
+            target_dt = pd.to_datetime(target_trade_date)
+            start = (target_dt - pd.Timedelta(days=14)).strftime("%Y-%m-%d")
+            df = GLOBAL_KR_CLIENT.get_ohlcv(symbol, start, target_dt.strftime("%Y-%m-%d"))
+            if df is None or df.empty or df.index[-1].strftime("%Y%m%d") != target_trade_date:
+                return None
+            row = df.iloc[-1]
+            pre_close = float(df.iloc[-2]["Close"]) if len(df) >= 2 else float(row["Close"])
+            return {
+                "ts_code": symbol,
+                "trade_date": target_trade_date,
+                "open": float(row["Open"]),
+                "high": float(row["High"]),
+                "low": float(row["Low"]),
+                "close": float(row["Close"]),
+                "pre_close": pre_close,
+                "change": float(row["Close"]) - pre_close,
+                "pct_chg": (float(row["Close"]) / pre_close - 1) * 100 if pre_close else 0.0,
+                "vol": float(row["Volume"]),
+                "amount": float(row["Volume"]) * float(row["Close"]),
+                # KR 가격제한폭 ±30% (기준가 단순 근사; 호가단위 반올림·기업행위 정밀화는 D22 §6)
+                "limit_price": pre_close * 1.3,
+            }
         elif market_name == "US-Stock":
             print(f"get_symbol_price: {market_name} {symbol} {target_trade_date}")
             
@@ -654,9 +719,14 @@ class MarketManager:
             )
             return df
         elif market_name == "US-Stock":
-            df = get_us_stock_price(symbol, start_date, end_date, 
+            df = get_us_stock_price(symbol, start_date, end_date,
                                       adjusted=True, adj_base_date=None, verbose=False)
             return df
+        elif market_name == "KR-Stock":
+            from utils.kr_data_utils import GLOBAL_KR_CLIENT
+            start = pd.to_datetime(start_date).strftime("%Y-%m-%d")
+            end = pd.to_datetime(end_date).strftime("%Y-%m-%d")
+            return GLOBAL_KR_CLIENT.get_ohlcv(symbol, start, end)
         else:
             raise ValueError(f"Invalid market: {market_name}")
 
@@ -668,7 +738,7 @@ class MarketManager:
         # check if the market is trading at given trigger_time  
         trigger_date = trigger_time.split(" ")[0].replace("-", "")
         trade_date = self.get_trade_date(market_name)
-        if market_name in ["CN-Stock", "CN-ETF", "US-Stock", "CSI300", "CSI500", "CSI1000"]:
+        if market_name in ["CN-Stock", "CN-ETF", "US-Stock", "KR-Stock", "CSI300", "CSI500", "CSI1000"]:
             return trigger_date in trade_date
         elif market_name == "HK-Stock":
             # Not supported yet
@@ -683,7 +753,7 @@ class MarketManager:
                 return True
         
         # check if the symbol is in the market
-        if market_name in ["CN-Stock", "CN-ETF", "US-Stock", "HK-Stock", "CSI300", "CSI500", "CSI1000"]:
+        if market_name in ["CN-Stock", "CN-ETF", "US-Stock", "KR-Stock", "HK-Stock", "CSI300", "CSI500", "CSI1000"]:
             try:
                 market_symbols = self.get_market_symbols(market_name, "2025-06-30 15:00:00")
                 return symbol in market_symbols['ts_code'].values
@@ -706,8 +776,8 @@ class MarketManager:
             # A股：100股起，整手交易
             shares_float = target_amount / price
             return int(shares_float // 100) * 100
-        elif market_name == "US-Stock":
-            # 美股：1股起，任意股数
+        elif market_name in ["US-Stock", "KR-Stock"]:
+            # 美股/韩股：1股起，任意股数
             return int(target_amount / price)
         elif market_name == "HK-Stock":
             # 港股：通常100股起
@@ -741,6 +811,8 @@ class MarketManager:
             return self._calculate_a_stock_costs(config, action, shares, amount)
         elif market_name == "US-Stock":
             return self._calculate_us_stock_costs(config, action, shares, amount)
+        elif market_name == "KR-Stock":
+            return self._calculate_kr_stock_costs(config, action, shares, amount)
         elif market_name == "HK-Stock":
             return self._calculate_hk_stock_costs(config, action, shares, amount)
         else:
@@ -768,7 +840,20 @@ class MarketManager:
             'total_cost': total_cost
         }
     
-    def _calculate_us_stock_costs(self, config: USStockTradingConfig, action: str, 
+    def _calculate_kr_stock_costs(self, config: KRStockTradingConfig, action: str,
+                               shares: int, amount: float) -> Dict[str, float]:
+        """계산: 韩股 — 위탁수수료(양방향) + 증권거래세·농특세(매도만)"""
+        commission = amount * config.commission_rate
+        transaction_tax = amount * config.transaction_tax_rate if action == "sell" else 0.0
+        total_cost = commission + transaction_tax
+        return {
+            "commission": commission,
+            "stamp_tax": transaction_tax,   # 키 이름은 A주 포맷과 호환 유지
+            "transfer_fee": 0.0,
+            "total_cost": total_cost,
+        }
+
+    def _calculate_us_stock_costs(self, config: USStockTradingConfig, action: str,
                                 shares: int, amount: float) -> Dict[str, float]:
         """计算美股交易成本"""
         if config.fee_type == "per_trade":

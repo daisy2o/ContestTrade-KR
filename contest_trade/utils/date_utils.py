@@ -8,21 +8,23 @@ def get_current_datetime(trigger_time: str) -> str:
     else:
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-def get_previous_trading_date(trigger_time: str, output_format: str = "%Y%m%d") -> str:
+def get_previous_trading_date(trigger_time: str, output_format: str = "%Y%m%d", market_name: str = "CN-Stock") -> str:
     """获取trigger_time的上一个交易日
-    
+
     Args:
         trigger_time (str): 触发时间，格式：YYYY-MM-DD HH:MM:SS
-    
+        market_name (str): 交易日历所属市场 (기존 호출 호환을 위해 기본값 CN-Stock 유지;
+                           KR 어댑터 경로는 반드시 "KR-Stock"을 명시 전달 — A주 캘린더 하드코딩 버그 수정)
+
     Returns:
         str: 上一个交易日，格式：YYYYMMDD
     """
     # 解析trigger_time
     trigger_datetime = datetime.strptime(trigger_time, '%Y-%m-%d %H:%M:%S')
     trigger_date = trigger_datetime.strftime('%Y%m%d')
-    
+
     # 获取交易日列表
-    trade_dates = GLOBAL_MARKET_MANAGER.get_trade_date(market_name="CN-Stock")
+    trade_dates = GLOBAL_MARKET_MANAGER.get_trade_date(market_name=market_name)
     
     # 找到上一个交易日
     previous_dates = [dt for dt in trade_dates if dt < trigger_date]
