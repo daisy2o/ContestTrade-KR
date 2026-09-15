@@ -235,3 +235,7 @@ test*
 *copy*
 *tmp*
 *_cache
+
+# KR research additions: tests must be tracked (override test* rule above)
+!contest_trade/tests/
+!contest_trade/tests/**
