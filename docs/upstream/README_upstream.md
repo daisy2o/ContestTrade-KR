@@ -1,10 +1,3 @@
-> ## 🇰🇷 KOSPI Research Fork (DFMBA 현장적용프로젝트)
-> **This is a private research fork.** We independently verify ContestTrade's
-> contest mechanism on the Korean market (KOSPI) with judgment-quality metrics.
-> **Start here → [KR_RESEARCH_README.md](KR_RESEARCH_README.md)** (what we added,
-> what is verified, usage rules). Upstream base: commit `22432f9`; our work lives
-> on branch `kr-research`. Original project by FinStep-AI (Apache-2.0, preserved below).
-
 <p align="center">
   <img src="assets/logo.jpg" style="width: 100%; height: auto;">
 </p>
