@@ -1,0 +1,104 @@
+{
+  "repo": "/Users/hijeong/Documents/Workspace/ContestTrade",
+  "scope": "로컬 코드 진단 + 합성 예제. LLM 성능 실측 아님.",
+  "head": "22432f9bbba5f1d6862d3b6b5508d4d882b40b94",
+  "tracked_tests": [],
+  "ignored_test_rule": ".gitignore:234:test*\tcontest_trade/tests/test_signal_parser.py",
+  "predict_method_exists": false,
+  "predictor_init": {
+    "type": "FileNotFoundError",
+    "message": "LightGBM模型文件未找到: /Users/hijeong/Documents/Workspace/ContestTrade/contest_trade/contest/researcher/lightgbm_predictor"
+  },
+  "nonpositive_scores": {
+    "weights": {
+      "A": 0.0,
+      "B": 0.0
+    },
+    "sum": 0.0,
+    "WDA_denominator_is_zero": true
+  },
+  "parser_probes": {
+    "80": {
+      "rate": 1.0,
+      "probability": 80.0,
+      "errors": []
+    },
+    "80 to 90": {
+      "rate": 1.0,
+      "probability": 80.0,
+      "errors": []
+    },
+    "0.8": {
+      "rate": 1.0,
+      "probability": 0.8,
+      "errors": []
+    },
+    "1e2": {
+      "rate": 1.0,
+      "probability": 1.0,
+      "errors": []
+    }
+  },
+  "unclosed_extra_block": {
+    "detected_blocks": 1,
+    "rate": 1.0
+  },
+  "intraday_probe": {
+    "morning_close": 109.0,
+    "evening_close": 109.0,
+    "identical_daily_record": true,
+    "interpretation": "판단용으로 09:00에 호출하면 당일 종가를 얻음. 채점용 사용과 구분 필요."
+  },
+  "equal_weight_identity": {
+    "single_agent_scores": [
+      0.5,
+      0.25
+    ],
+    "mean_C1": 0.375,
+    "C2_signal_accuracy": 0.375,
+    "interpretation": "동일 신호 수·동일 평가일 합성 예제. 이 지표의 C1 평균→C2 차이는 앙상블 개선을 측정하지 못함."
+  },
+  "document_arithmetic": [
+    {
+      "cutoff_month": "2025-05",
+      "start": "2025-06",
+      "end": "2026-10",
+      "months": 17,
+      "document_total": 306,
+      "same_assumption_total": 346.79999999999995
+    },
+    {
+      "cutoff_month": "2026-01",
+      "start": "2026-02",
+      "end": "2026-10",
+      "months": 9,
+      "document_upper_bound": 143,
+      "same_assumption_total": 183.6
+    },
+    {
+      "cutoff_month": "2026-02",
+      "start": "2026-03",
+      "end": "2026-10",
+      "months": 8,
+      "document_upper_bound": 143,
+      "same_assumption_total": 163.2
+    }
+  ],
+  "hypothetical_api_cost": {
+    "input_tokens": 120000000,
+    "output_tokens": 30000000,
+    "gpt_4_1_usd": 480,
+    "gpt_4_1_mini_usd": 96.0,
+    "note": "공식 표준 단가를 가정한 산술 예시. 캐시/배치 할인, 도구/데이터 비용, 재시도는 미포함. 실측 비용 아님."
+  },
+  "source_sha256": {
+    "contest_trade/utils/market_manager.py": "2d4a8fa6be31b16260203dda20c5ddb7b8d89e94d78d65abffc5aa852aec8550",
+    "contest_trade/utils/kr_data_utils.py": "dfacd6139b1b4c47475f17d2414311949e317e936ada4b01262ba04fa0e821a4",
+    "contest_trade/evaluation/signal_parser.py": "8a5fb35f6771eb5f50f19b05dada0907ba274fcfc9703ed9de24f67362f44fba",
+    "contest_trade/contest/researcher/research_predictor.py": "36742c53b7abf10d2599642fae05e87f8cd2e9052232d16d2468b6e3e461f0cc",
+    "contest_trade/contest/researcher/research_contest.py": "80004deb52f673d28e7c2ffbfef3f3da68be0794d2445903ad95e584b7f916af",
+    "contest_trade/contest/researcher/research_data_manager.py": "57bf18cba4759e24d1939be4aa5481351a0f6d71646441b24dd712240ec76677",
+    "contest_trade/contest/researcher/research_weight_optimizer.py": "509725dc372c401f79158f5dd174c81a9a8da39f8a35c70ad53f462a0fa6296a",
+    ".gitignore": "206b518cf1da704310b2b527c2e57f4c0bfe7a1bf51887bb75c23938f4e05f89"
+  }
+}
