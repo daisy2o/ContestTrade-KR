@@ -33,4 +33,4 @@ KAIST 디지털금융MBA 현장적용프로젝트 (2026) · **Private research r
 
 ## 팀
 
-KAIST 디지털금융MBA — 정선우 · 하희정 · 이수정
+KAIST 디지털금융MBA — 정선우 · 이수정 · 하희정
