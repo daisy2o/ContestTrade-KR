@@ -906,7 +906,7 @@ def display_detailed_report(final_state: Dict):
 
 @app.command()
 def run(
-    market: Optional[str] = typer.Option(None, "--market", "-m", help="选择市场 (CN-Stock/US-Stock)"),
+    market: Optional[str] = typer.Option(None, "--market", "-m", help="选择市场 (CN-Stock/US-Stock/KR-Stock)"),
 ):
     """运行ContestTrade分析"""
 
@@ -919,7 +919,7 @@ def run(
         console.print("[red]未提供市场选择[/red]")
         raise typer.Exit(1)
     
-    if market not in ["CN-Stock", "US-Stock"]:
+    if market not in ["CN-Stock", "US-Stock", "KR-Stock"]:
         console.print("[red]市场选择错误，请选择 CN-Stock 或 US-Stock[/red]")
         raise typer.Exit(1)
     

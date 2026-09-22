@@ -76,9 +76,12 @@ def _load_messages(since_utc: str, until_utc: str) -> pd.DataFrame:
 
 
 class KrTelegramResearch(KRDataSourceBase):
-    def __init__(self, universe_names: dict, cache_dir=None):
-        """universe_names: {6자리 종목코드: 종목명} — D40의 8~30종목 유니버스."""
+    def __init__(self, universe_names: dict | None = None, cache_dir=None):
+        """universe_names: {6자리 종목코드: 종목명}. None이면 유니버스 CSV 자동 로드."""
         super().__init__("kr_telegram_research", cache_dir=cache_dir)
+        if universe_names is None:
+            from utils.kr_universe import load_universe
+            universe_names = load_universe()
         self.universe_names = universe_names
 
     def fetch_raw(self, trigger_time: str) -> pd.DataFrame:

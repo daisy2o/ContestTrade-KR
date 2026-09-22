@@ -156,7 +156,8 @@ def get_market_selection() -> str:
     """获取用户市场选择 - 使用箭头键选择"""
     market_options = [
         "CN-Stock (A股市场)",
-        "US-Stock (美股市场)"
+        "US-Stock (美股市场)",
+        "KR-Stock (한국 시장)"
     ]
     
     market_choice = questionary.select(
@@ -178,6 +179,8 @@ def get_market_selection() -> str:
         return "CN-Stock"
     elif market_choice == market_options[1]:
         return "US-Stock"
+    elif market_choice == market_options[2]:
+        return "KR-Stock"
     else:
         return None
 
@@ -189,6 +192,9 @@ def get_trigger_time_for_market(market: str) -> str:
     # 根据市场获取触发时间
     if market == "CN-Stock":
         # A股市场使用当前交易日
+        return get_trigger_time()
+    elif market == "KR-Stock":
+        # 한국 시장: 로컬(KST) 기준 당일
         return get_trigger_time()
     elif market == "US-Stock":
         # 美股市场使用美东时区时间

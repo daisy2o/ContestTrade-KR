@@ -124,6 +124,9 @@ def parse_dart_rows(rows: list, universe: set | None = None, events_only: bool =
 class KrDartDisclosure(KRDataSourceBase):
     def __init__(self, universe: set | None = None):
         super().__init__("kr_dart_disclosure")
+        if universe is None:  # 파이프라인의 무인자 생성 경로 — 유니버스 CSV에서 자동 로드
+            from utils.kr_universe import load_universe
+            universe = set(load_universe())
         self.universe = universe
 
     def _fetch_page(self, key: str, bgn_de: str, end_de: str, page_no: int) -> dict:

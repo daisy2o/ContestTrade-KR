@@ -17,6 +17,8 @@ class ProjectConfig:
         # Choose config file based on market type
         if market_type == 'US-Stock':
             config_filename = "config_us.yaml"
+        elif market_type == 'KR-Stock':
+            config_filename = "config_kr.yaml"
         else:
             config_filename = "config.yaml"
         

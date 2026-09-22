@@ -26,9 +26,13 @@ LOOKBACK_DAYS = 3
 
 
 class KrFactivaNews(KRDataSourceBase):
-    def __init__(self, universe_names: dict, factiva_code_map: dict, cache_dir=None):
-        """universe_names: {종목코드: 종목명} / factiva_code_map: {factiva코드: 종목코드}"""
+    def __init__(self, universe_names: dict | None = None, factiva_code_map: dict | None = None, cache_dir=None):
+        """universe_names/factiva_code_map이 None이면 유니버스 CSV에서 자동 로드 (파이프라인 무인자 경로)."""
         super().__init__("kr_factiva_news", cache_dir=cache_dir)
+        if universe_names is None or factiva_code_map is None:
+            from utils.kr_universe import load_universe, load_factiva_code_map
+            universe_names = universe_names or load_universe()
+            factiva_code_map = factiva_code_map or load_factiva_code_map()
         self.universe_names = universe_names
         self.factiva_code_map = {k.lower(): v for k, v in factiva_code_map.items()}
 
