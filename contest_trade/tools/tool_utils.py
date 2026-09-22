@@ -63,7 +63,8 @@ class ToolManager:
             module = importlib.import_module(module_name)
             func = getattr(module, func_name)
             
-            if not callable(func):
+            # langchain-core 1.x tool objects are not plain callables but expose ainvoke
+            if not (callable(func) or hasattr(func, 'ainvoke')):
                 raise ValueError(f"{module_path} is not callable")
             
             return self.register_function(func)

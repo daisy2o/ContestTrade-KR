@@ -162,10 +162,15 @@ class OpenAIProvider(BaseProvider):
         # Handle thinking mode for compatible models
         if 'thinking' in params:
             thinking_flag = params.pop('thinking')
-            if thinking_flag:
-                params['extra_body'] = {"thinking": {"type": "enabled"}}
-            else:
-                params['extra_body'] = {"thinking": {"type": "disabled"}}
+            # The `thinking` extra_body is a DeepSeek-style extension. The official
+            # OpenAI endpoint rejects unknown body fields, so skip it there.
+            effective_base_url = self.base_url or "https://api.openai.com/v1"  # SDK default
+            is_official_openai = "openai.com" in effective_base_url
+            if not is_official_openai:
+                if thinking_flag:
+                    params['extra_body'] = {"thinking": {"type": "enabled"}}
+                else:
+                    params['extra_body'] = {"thinking": {"type": "disabled"}}
         
         return await self.async_client.chat.completions.create(**params)
     
