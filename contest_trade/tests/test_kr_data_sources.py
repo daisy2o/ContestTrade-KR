@@ -100,6 +100,44 @@ def test_dart_conservative_next_day_rule():
     assert df.iloc[0]["pub_time"] == "2026-09-19 00:00:00"
 
 
+def test_dart_event_filter_excludes_noise():
+    """9/21 통합 테스트 발견 반영: 해명·IR 공시는 이벤트 필터에서 제외."""
+    rows = [
+        {"corp_name": "신한지주", "stock_code": "055550", "rcept_dt": "20260918",
+         "report_nm": "풍문또는보도에대한해명", "rcept_no": "20260918000009", "flr_nm": "신한지주"},
+        {"corp_name": "탑선", "stock_code": "180060", "rcept_dt": "20260918",
+         "report_nm": "기업설명회(IR)개최", "rcept_no": "20260918000010", "flr_nm": "탑선"},
+        {"corp_name": "삼성전자", "stock_code": "005930", "rcept_dt": "20260918",
+         "report_nm": "자기주식취득결정", "rcept_no": "20260918000011", "flr_nm": "삼성전자"},
+    ]
+    df = parse_dart_rows(rows)
+    assert len(df) == 1 and "자기주식" in df.iloc[0]["title"]
+
+
+def test_dart_events_only_false_keeps_all_listed():
+    rows = [
+        {"corp_name": "회사A", "stock_code": "111111", "rcept_dt": "20260918",
+         "report_nm": "감사보고서", "rcept_no": "1", "flr_nm": "A"},
+    ]
+    assert len(parse_dart_rows(rows, events_only=False)) == 1
+    assert len(parse_dart_rows(rows, events_only=True)) == 0
+
+
+def test_dart_all_filtered_day_keeps_column_contract(tmp_path):
+    """전부 걸러진 날에도 빈 DataFrame이 컬럼 계약을 지켜야 함 (9/21 라이브 발견 버그)."""
+    class NoisyDart(KRDataSourceBase):
+        def __init__(self):
+            super().__init__("noisy_dart", cache_dir=tmp_path)
+
+        def fetch_raw(self, trigger_time):
+            rows = [{"corp_name": "신한지주", "stock_code": "055550", "rcept_dt": "20260918",
+                     "report_nm": "풍문또는보도에대한해명", "rcept_no": "9", "flr_nm": "x"}]
+            return parse_dart_rows(rows)
+
+    df = NoisyDart().get_data("2026-09-19 09:00:00")
+    assert len(df) == 0 and list(df.columns) == ["title", "content", "pub_time", "url"]
+
+
 def test_dart_url_contains_rcept_no():
     df = parse_dart_rows(DART_ROWS, universe={"005930"})
     assert "20260918000001" in df.iloc[0]["url"]

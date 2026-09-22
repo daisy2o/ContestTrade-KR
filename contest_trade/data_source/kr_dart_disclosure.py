@@ -49,7 +49,42 @@ def _load_dart_key() -> str:
     )
 
 
-def parse_dart_rows(rows: list, universe: set | None = None) -> pd.DataFrame:
+# ── 공시 유형 필터 (2026-09-21 통합 테스트에서 발견: 해명공시 등 노이즈 유입) ──
+# 화이트리스트 = 팀 문서 D1 정의(이벤트 드리븐 공시) 기반. 조정은 이 목록만 수정.
+EVENT_KEYWORDS = [
+    "영업실적", "잠정실적", "실적공시",
+    "단일판매", "공급계약",
+    "유상증자", "무상증자", "전환사채", "신주인수권부사채", "교환사채",
+    "자기주식", "자사주",
+    "최대주주변경", "최대주주등소유주식변동",
+    "임원ㆍ주요주주특정증권", "임원·주요주주특정증권",
+    "주식등의대량보유",
+    "합병", "분할", "영업양수", "영업양도",
+    "소송", "파산", "회생절차", "상장폐지", "감자",
+    "현금ㆍ현물배당", "현금·현물배당", "배당",
+    "기업가치제고",
+    "주요사항보고서",
+]
+# 명시적 노이즈 (화이트리스트에 걸려도 제외 — 예: "풍문...해명"이 '합병' 단어 포함하는 경우)
+NOISE_KEYWORDS = [
+    "풍문또는보도", "해명",
+    "기업설명회", "IR개최",
+    "일괄신고서", "증권신고서(집합투자증권",
+    "의결권대리행사권유",
+]
+
+
+def classify_event(report_nm: str) -> str | None:
+    """공시 제목을 이벤트 유형으로 분류. 노이즈면 None."""
+    if any(k in report_nm for k in NOISE_KEYWORDS):
+        return None
+    for k in EVENT_KEYWORDS:
+        if k in report_nm:
+            return k
+    return None
+
+
+def parse_dart_rows(rows: list, universe: set | None = None, events_only: bool = True) -> pd.DataFrame:
     """list.json의 list[] 항목들을 컬럼 계약 DataFrame으로 변환 (순수 함수 — 테스트 대상).
 
     - 상장사만: stock_code 6자리 존재
@@ -66,10 +101,14 @@ def parse_dart_rows(rows: list, universe: set | None = None) -> pd.DataFrame:
         rcept_dt = r.get("rcept_dt", "")  # YYYYMMDD
         if len(rcept_dt) != 8:
             continue
+        report_nm = (r.get("report_nm") or "").strip()
+        event = classify_event(report_nm)
+        if events_only and event is None:
+            continue  # 이벤트 드리븐 공시만 (D1 정의 화이트리스트)
         usable_from = datetime.strptime(rcept_dt, "%Y%m%d") + timedelta(days=1)
         out.append(
             {
-                "title": f"[{r.get('corp_name', '')}({stock_code})] {r.get('report_nm', '')}",
+                "title": f"[{r.get('corp_name', '')}({stock_code})] {report_nm}",
                 "content": (
                     f"공시: {r.get('report_nm', '')} / 회사: {r.get('corp_name', '')}"
                     f"({stock_code}) / 접수일: {rcept_dt} / 제출인: {r.get('flr_nm', '')}"
@@ -78,7 +117,8 @@ def parse_dart_rows(rows: list, universe: set | None = None) -> pd.DataFrame:
                 "url": f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={r.get('rcept_no', '')}",
             }
         )
-    return pd.DataFrame(out)
+    # 빈 결과여도 컬럼 계약 유지 (필터가 전부 걸러낸 날 — 9/21 라이브에서 발견된 버그)
+    return pd.DataFrame(out, columns=["title", "content", "pub_time", "url"])
 
 
 class KrDartDisclosure(KRDataSourceBase):

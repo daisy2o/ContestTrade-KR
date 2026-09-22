@@ -104,7 +104,8 @@ class KrTelegramResearch(KRDataSourceBase):
                     "url": f"https://t.me/{r['channel']}/{r['message_id']}",
                 }
             )
-        return pd.DataFrame(rows)
+        # 빈 결과여도 컬럼 계약 유지 (태깅이 전부 실패한 날 대비 — kr_dart와 동일 버그 예방)
+        return pd.DataFrame(rows, columns=["title", "content", "pub_time", "url"])
 
 
 if __name__ == "__main__":
