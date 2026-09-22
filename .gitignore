@@ -235,3 +235,15 @@ test*
 *copy*
 *tmp*
 *_cache
+
+# KR project (DFMBA) - never commit real data, keys, or telegram sessions
+data/
+*.sqlite
+*.sqlite-journal
+*.session
+*.session-journal
+config_kr.yaml
+.env
+__pycache__/
+.venv/
+contest_trade/agents_workspace/results/

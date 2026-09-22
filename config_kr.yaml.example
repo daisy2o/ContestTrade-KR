@@ -1,0 +1,75 @@
+# ==================================================
+# ContestTrade KR 설정 예시 (DFMBA 졸업 프로젝트)
+# ==================================================
+# 사용법:  cp config_kr.yaml.example config_kr.yaml  → 아래 YOUR_... 값을 채운다.
+# config_kr.yaml, .env, *.session, *.sqlite, data/ 는 모두 gitignore 대상이다. 실제 키를 이 예시 파일에 적지 말 것.
+# 로컬에 config_kr.yaml 원본이 없어 config_us.yaml 구조를 바탕으로 만든 초안이다. 어댑터 모듈명은 구현 후 확정한다.
+
+# --- 원본 프레임워크 데이터 소스 키 (KR 파일럿에서는 사용하지 않음, 빈칸 유지) ---
+tushare_key: ""
+bocha_key: ""
+serp_key: ""
+fmp_key: ""
+finnhub_key: ""
+
+# --- KR 데이터 소스 키 (환경변수 DART_API_KEY / TG_API_ID / TG_API_HASH 로도 줄 수 있음) ---
+dart_api_key: "YOUR_DART_API_KEY"          # OpenDART 인증키  https://opendart.fss.or.kr
+tg_api_id: "YOUR_TG_API_ID"                # 텔레그램 API ID   https://my.telegram.org
+tg_api_hash: "YOUR_TG_API_HASH"            # 텔레그램 API hash
+tg_session_path: "data/telegram/contesttrade.session"   # Telethon 세션 파일 (*.session 은 gitignore)
+
+# --- LLM (OpenAI 공식 엔드포인트 또는 OpenAI 호환 API) ---
+# base_url 에 openai.com 이 들어가면 DeepSeek 전용 thinking extra_body 를 보내지 않는다 (models/llm_model.py 패치).
+llm:
+  provider: "openai"
+  base_url: "https://api.openai.com/v1"
+  api_key: "YOUR_OPENAI_API_KEY"
+  model_name: "YOUR_LLM_MODEL_NAME"        # 예: gpt-4.1-mini
+
+llm_thinking:
+  provider: "openai"
+  base_url: "https://api.openai.com/v1"
+  api_key: "YOUR_OPENAI_API_KEY"
+  model_name: "YOUR_THINKING_MODEL_NAME"   # 예: o4-mini. 미설정 시 llm 으로 대체됨
+
+vlm:
+  provider: "openai"
+  base_url: "https://api.openai.com/v1"
+  api_key: "YOUR_OPENAI_API_KEY"
+  model_name: "YOUR_VLM_MODEL_NAME"
+
+# --- KR 데이터 에이전트 (백테스트용 4소스, docs/data_sources.md 참고) ---
+# TODO: 어댑터 구현 후 모듈 경로 확정. 아래는 계획 이름.
+data_agents_config:
+  - agent_name: "kr_dart_disclosure_agent"
+    data_source_list:
+      - "data_source.kr_dart_disclosure.KRDartDisclosure"        # data/dart.sqlite
+  - agent_name: "kr_price_market_agent"
+    data_source_list:
+      - "data_source.kr_price_market.KRPriceMarket"              # data/market.sqlite (pykrx 시세·수급)
+  - agent_name: "kr_telegram_research_agent"
+    data_source_list:
+      - "data_source.kr_telegram_research.KRTelegramResearch"    # 증권사 리서치 4채널
+  - agent_name: "kr_factiva_news_agent"
+    data_source_list:
+      - "data_source.kr_factiva_news.KRFactivaNews"              # 한경·매경·서울경제
+
+research_agent_config:
+  belief_list_path: "config/belief_list_kr.json"                 # TODO: KR 신념 목록 작성
+  max_react_step: 10
+  output_language: "한국어"
+  tools:
+    # TODO: KR 도구 어댑터 구현 후 교체 (stock_symbol_search_kr, corp_info_kr, price_info_kr, stock_summary_kr)
+    - "tools.search_web.search_web"
+    - "tools.final_report.final_report"
+
+market_config_file: "config/market_config_kr.yaml"               # TODO: KRX 거래시간·휴장일 설정
+
+system_language: "한국어"
+
+researcher_contest_config:
+  contest_mode: False
+  judger_config: llm
+  num_judgers: 3
+  window_m: 3
+  window_n: 3
