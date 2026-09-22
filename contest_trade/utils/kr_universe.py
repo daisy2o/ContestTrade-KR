@@ -72,6 +72,22 @@ def load_universe(csv_path=None) -> dict:
     return universe
 
 
+def load_factiva_code_map(csv_path=None) -> dict:
+    """{factiva_co_code: 6자리 종목코드}. universe CSV에 'factiva_co_code' 컬럼 필요.
+    코드가 비어 있는 종목(30개 중 일부)은 제외 — 그 종목들은 이름 매칭 폴백으로 커버."""
+    path = Path(csv_path) if csv_path else DEFAULT_UNIVERSE_CSV
+    df = pd.read_csv(path, dtype=str, encoding="utf-8-sig")
+    if "factiva_co_code" not in df.columns:
+        raise ValueError(f"'factiva_co_code' 컬럼이 없습니다: {list(df.columns)}")
+    code_col, _ = _detect_columns(df)
+    out = {}
+    for _, row in df.iterrows():
+        fc = str(row.get("factiva_co_code") or "").strip()
+        if fc and fc.lower() != "nan":
+            out[fc.lower()] = str(row[code_col]).strip().zfill(6)
+    return out
+
+
 if __name__ == "__main__":
     u = load_universe()
     print(f"{len(u)}종목 로드:")

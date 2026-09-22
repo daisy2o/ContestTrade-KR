@@ -246,3 +246,4 @@ data_collection/telegram_secrets.yaml
 data_collection/data/
 contest_trade/data_source/data_cache/
 data_collection/kr_secrets.yaml
+data_collection/factiva/
