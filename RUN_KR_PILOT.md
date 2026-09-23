@@ -10,32 +10,43 @@
 
 ## 1. 클론 및 설치
 
+팀 저장소 기준입니다 (하희정 작업이 병합되기 전이라면, 아래 주소 대신
+`https://github.com/daisy2o/ContestTrade-KR.git`의 `feat/HJ` 브랜치를 클론하세요).
+
 ```bash
-git clone https://github.com/daisy2o/contesttrade-kr-research.git
-cd contesttrade-kr-research
-git checkout kr-research
+git clone https://github.com/platina310/ContestTrade-KR.git
+cd ContestTrade-KR
 python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements_kr.txt
 ```
+
+`requirements_kr.txt`에 KR 실행에 추가로 필요한 패키지(finance-datareader 등)가
+들어 있습니다 — 빠뜨리면 시세 조회 단계에서 ModuleNotFoundError가 납니다.
 
 ## 2. 데이터 파일 받기 (git에 없음 — 하희정이 전달)
 
 `data/` 폴더는 gitignore 대상입니다. 아래 파일을 받아 같은 위치에 놓으세요.
 
-| 파일 | 위치 | 내용 |
+| 파일 | 놓을 위치 (코드가 읽는 정확한 경로) | 내용 |
 |---|---|---|
-| `telegram_research.sqlite` | `data_collection/data/` | 증권사 텔레그램 리서치 (2024-01~) |
-| `factiva_news.sqlite` | `data_collection/data/` | Factiva 뉴스 (2026-05~06) |
+| `telegram_research.sqlite` | `data_collection/data/telegram/` | 증권사 텔레그램 리서치 (2024-01~) |
+| `factiva_news.sqlite` | `data_collection/data/factiva/` | Factiva 뉴스 (2026-05~06) |
+
+⚠️ 하위 폴더(`telegram/`, `factiva/`)까지 정확히 맞춰야 합니다. 폴더가 없으면 만들어서 넣으세요.
 
 universe(K-TOP30) 파일은 저장소에 포함되어 있습니다 (`data_collection/universe/ktop30.csv`).
 
 ## 3. API 키 설정 (로컬 전용, 커밋 절대 금지)
 
-루트의 `config_kr.yaml`을 열어 두 곳을 채웁니다:
+**방법 1 (권장) — 환경변수.** 파일을 건드리지 않아 실수 커밋 위험이 0입니다:
 
-- `llm.api_key`: 본인 OpenAI 키 (`sk-...`)
-- 모델은 그대로 `gpt-4o-mini` (팀 합의: 테스트는 저가 모델)
+```bash
+export OPENAI_API_KEY="sk-본인키"        # Windows: set OPENAI_API_KEY=sk-본인키
+```
+
+**방법 2 — config 편집.** 루트의 `config_kr.yaml`에서 `llm.api_key`에 본인 키 입력.
+모델은 그대로 `gpt-4o-mini` (팀 합의: 테스트는 저가 모델)
 
 DART 키(공시 수집용)는 `data_collection/kr_secrets.yaml`에 넣습니다. 파일이 없으면:
 
@@ -45,7 +56,7 @@ dart_api_key: "본인 DART 키"
 
 (DART 키는 https://opendart.fss.or.kr 에서 무료 발급, 1분 소요.)
 
-키 넣은 뒤 실수 커밋 방지 잠금(권장):
+방법 2를 쓸 경우에만, 실수 커밋 방지 잠금을 함께:
 
 ```bash
 git update-index --skip-worktree config_kr.yaml
@@ -61,9 +72,9 @@ CONTEST_TRADE_MARKET=KR-Stock python dryrun_kr.py 2026-05-29
 ```
 
 가짜 LLM으로 전체 파이프라인이 크래시 없이 도는지 확인합니다. 마지막 줄에
-`✅ 드라이런 완주`가 나오면 정상. **주의: 드라이런이 만든 결과물은 가짜이므로
-실제 실행 전에 삭제**: `agents_workspace/factors/`와 `agents_workspace/reports/`에서
-해당 날짜 파일 삭제.
+`✅ 드라이런 완주`가 나오면 정상. 드라이런이 새로 만든 가짜 팩터·리포트는
+종료 시 `agents_workspace/_dryrun_quarantine/`으로 자동 격리되므로,
+실제 실행이 가짜 결과를 재사용할 걱정은 없습니다.
 
 ### 4-2. 실제 하루 실행 (약 $0.1 이하 예상)
 

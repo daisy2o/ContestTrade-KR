@@ -56,6 +56,33 @@ def make_mock():
     return mock_a_run, calls
 
 
+def _artifact_paths(trigger_date: str):
+    """이 날짜의 드라이런 산출물(팩터·리포트) 경로 목록."""
+    ws = Path(__file__).parent / "agents_workspace"
+    stamp = f"{trigger_date}_09-00-00.json"
+    return [p for d in ("factors", "reports") if (ws / d).exists()
+            for p in (ws / d).rglob(stamp)]
+
+
+def _quarantine_new_artifacts(trigger_date: str, preexisting: set):
+    """드라이런이 새로 만든 가짜 산출물을 실제 실행이 재사용하지 못하게 격리.
+
+    드라이런 전부터 있던 파일(진짜일 수 있음)은 건드리지 않는다."""
+    ws = Path(__file__).parent / "agents_workspace"
+    qdir = ws / "_dryrun_quarantine" / trigger_date
+    moved = 0
+    for p in _artifact_paths(trigger_date):
+        if p in preexisting:
+            continue
+        dest = qdir / p.relative_to(ws)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        p.rename(dest)
+        moved += 1
+    if moved:
+        print(f"가짜 산출물 {moved}개를 격리: {qdir}")
+    return moved
+
+
 async def main(trigger_date: str):
     from models import llm_model
     mock, calls = make_mock()
@@ -67,6 +94,7 @@ async def main(trigger_date: str):
 
     from main import SimpleTradeCompany
     trigger = f"{trigger_date} 09:00:00"
+    preexisting = set(_artifact_paths(trigger_date))  # 드라이런 이전부터 있던 산출물 보호
     print(f"=== KR 드라이런: {trigger} (LLM 모의, 데이터 실물) ===")
     company = SimpleTradeCompany()
     state = await company.run_company(trigger)
@@ -91,6 +119,7 @@ async def main(trigger_date: str):
         print(f"\n✅ 드라이런 완주 — 조립 전 구간 이상 없음{note}")
     else:
         print("\n⚠️ 드라이런 불완전 — 위 수치 확인 필요")
+    _quarantine_new_artifacts(trigger_date, preexisting)
 
 
 if __name__ == "__main__":

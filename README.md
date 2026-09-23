@@ -1,7 +1,8 @@
 # 멀티에이전트 LLM 투자 판단에서 내부 경쟁 메커니즘의 기여 분석
 ### Contest-Mechanism Ablation of Multi-Agent LLM Trading — Korean Market (KOSPI) Study
 
-KAIST 디지털금융MBA 현장적용프로젝트 (2026) · **Private research repository**
+KAIST 디지털금융MBA 현장적용프로젝트 (2026) · 팀: 정선우 · 이수정 · 하희정
+팀 공용 저장소: [platina310/ContestTrade-KR](https://github.com/platina310/ContestTrade-KR) — 데이터·키·실험 결과는 저장소에 올리지 않는다.
 
 ## 연구 질문
 
@@ -21,8 +22,8 @@ KAIST 디지털금융MBA 현장적용프로젝트 (2026) · **Private research r
 | `contest_trade/tests/` | 회귀 테스트 — `python -m pytest contest_trade/tests -q` |
 | [docs/upstream/](docs/upstream/) | 원본 프로젝트 문서 (보존용) |
 
-작업 브랜치: **`kr-research`** (우리 기여) · `main`: 원본 기준점(commit `22432f9`)
-→ `git log main..kr-research`가 곧 이 연구의 기여 목록이다.
+브랜치 규칙: `main`(원본 기준점, commit `22432f9`) · 팀원별 작업은 `feat/SW`·`feat/SJ`·`feat/HJ` → PR로 병합
+→ `git log main..feat/HJ`가 곧 이 연구의 파이프라인 기여 목록이다.
 
 ## 원본 프로젝트 (Attribution)
 

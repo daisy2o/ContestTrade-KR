@@ -29,7 +29,12 @@ class ProjectConfig:
             config = yaml.load(fr, Loader=yaml.FullLoader)
         for k in config:
             setattr(self, k, config[k])
-        
+
+        # 키 미기입 시 환경변수 폴백 (팀 가이드 방법 1: 파일 무편집 → 실수 커밋 원천 차단)
+        env_key = os.environ.get("OPENAI_API_KEY", "")
+        if env_key and isinstance(getattr(self, "llm", None), dict) and not self.llm.get("api_key"):
+            self.llm["api_key"] = env_key
+
         # Store the market type for reference
         self.market_type = market_type
 
