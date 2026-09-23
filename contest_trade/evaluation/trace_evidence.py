@@ -41,10 +41,10 @@ def _field(tag, s):
     return m.group(1).strip() if m else ""
 
 
-def load_asof_docs(judge_date: str):
+def load_asof_docs(judge_date: str, trigger_hour: str = "08:30:00"):
     """어댑터와 동일한 as-of 규칙의 원문 풀. 반환: [(doc_id, source, text)]"""
     docs = []
-    t_utc = (pd.Timestamp(judge_date + " 09:00:00") - pd.Timedelta(hours=9)).isoformat()
+    t_utc = (pd.Timestamp(f"{judge_date} {trigger_hour}") - pd.Timedelta(hours=9)).isoformat()
     t0 = (pd.Timestamp(judge_date) - pd.Timedelta(days=7)).strftime("%Y-%m-%d")
     with sqlite3.connect(TELE_DB) as c:
         for ch, mid, txt in c.execute(
@@ -70,11 +70,11 @@ def excerpt(text: str, needle: str, width: int = 90) -> str:
     return t[max(0, i - width): i + width]
 
 
-def audit_day(judge_date: str):
-    docs = load_asof_docs(judge_date)
+def audit_day(judge_date: str, trigger_hour: str = "08:30:00"):
+    docs = load_asof_docs(judge_date, trigger_hour)
     norm_docs = [(did, src, t.replace(",", "")) for did, src, t in docs]
     rows = []
-    for rp in sorted((ROOT / "agents_workspace" / "reports").rglob(f"{judge_date}_09-00-00.json")):
+    for rp in sorted((ROOT / "agents_workspace" / "reports").rglob(f"{judge_date}_*.json")):
         rep = json.loads(rp.read_text())
         model_input = (rep.get("background_information") or "").replace(",", "")
         for blk in SIG_RE.findall(rep.get("final_result", "")):
