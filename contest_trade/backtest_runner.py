@@ -26,8 +26,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 
-def config_fingerprint() -> str:
-    """프롬프트·설정의 지문 (D26 replay ID) — belief/config_kr/market_config 해시."""
+def config_fingerprint(trigger_hour: str = "09:00:00") -> str:
+    """실험 조건의 지문 (D26 replay ID) — belief/config_kr/market_config + 판단 시각 해시.
+
+    판단 시각은 입력에 포함되는 정보의 마감선이므로 설정 파일과 동급의 조건이다
+    (예: 08:30 vs 09:00 합의 변경 시 지문이 달라져야 다른 실험으로 식별된다)."""
     h = hashlib.sha256()
     root = Path(__file__).parent
     for p in [root.parent / "config_kr.yaml",
@@ -35,6 +38,7 @@ def config_fingerprint() -> str:
               root / "config" / "market_config_kr.yaml"]:
         if p.exists():
             h.update(p.read_bytes())
+    h.update(trigger_hour.encode())
     return h.hexdigest()[:12]
 
 
@@ -49,7 +53,7 @@ async def run_replay(start_date: str, end_date: str, trigger_hour: str = "09:00:
     from main import SimpleTradeCompany
 
     days = [d for d in GLOBAL_KR_CLIENT.get_trade_dates(start_date, end_date)]
-    replay_id = config_fingerprint()
+    replay_id = config_fingerprint(trigger_hour)
     print(f"replay_id={replay_id} | 구간 {start_date}~{end_date} | KR 거래일 {len(days)}일")
 
     results = []
