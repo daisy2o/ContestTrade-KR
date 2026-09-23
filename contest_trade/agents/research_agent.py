@@ -41,6 +41,11 @@ class ResearchAgentOutput:
     belief: str
     final_result: str  # 报告
     final_result_thinking: str  # 报告思考
+    # 감사 가능성(KR 확장): 모델이 실제로 받은 입력을 복원할 수 있도록
+    # 도구 호출 이력과 계획도 저장 — 근거 검증 시 "원문에 있는가"와
+    # "모델이 그 정보를 받았는가"를 구분하기 위해 필요
+    tool_call_context: str = ""
+    plan_result: str = ""
 
     def to_dict(self):
         return {
@@ -49,7 +54,9 @@ class ResearchAgentOutput:
             "background_information": self.background_information,
             "belief": self.belief,
             "final_result": self.final_result,
-            "final_result_thinking": self.final_result_thinking
+            "final_result_thinking": self.final_result_thinking,
+            "tool_call_context": self.tool_call_context,
+            "plan_result": self.plan_result
         }
 
 @dataclass
@@ -318,7 +325,9 @@ class ResearchAgent:
                 background_information=state["background_information"],
                 belief=state["belief"],
                 final_result=state["final_result"],
-                final_result_thinking=state["final_result_thinking"]
+                final_result_thinking=state["final_result_thinking"],
+                tool_call_context=state.get("tool_call_context", ""),
+                plan_result=state.get("plan_result", "")
             )
         except Exception as e:
             logger.error(f"Error in write_report: {e}")

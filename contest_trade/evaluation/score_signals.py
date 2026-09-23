@@ -79,6 +79,21 @@ def t1_return(symbol: str, date: str) -> float | None:
     return exit_ / entry - 1.0
 
 
+def benchmark_day(date: str) -> dict | None:
+    """항상매수 벤치마크: 유니버스 전 종목 동일비중, 같은 진입·청산(T시가→T+1종가).
+
+    WDA 해석의 기준선 — 시스템 WDA가 이 값과 같으면 '방향 판단'의 증거가 없다
+    (매수 편향 하에서 상승 종목 비율을 그대로 따라가는 것과 구분 불가)."""
+    from utils.kr_universe import load_universe
+    rets = [r for r in (t1_return(c, date) for c in load_universe()) if r is not None]
+    if not rets:
+        return None
+    return {
+        "return": round(sum(rets) / len(rets), 5),
+        "up_ratio": round(sum(1 for r in rets if r > 0) / len(rets), 4),
+    }
+
+
 def score_day(date: str) -> dict:
     signals = load_day_signals(date)
     weights = build_portfolio(signals)
@@ -94,6 +109,7 @@ def score_day(date: str) -> dict:
         port_ret += w * r
         rows.append({"symbol": sym, "weight": round(w, 4),
                      "t1_return": round(r, 5), "hit": hit})
+    bench = benchmark_day(date)
     return {
         "date": date,
         "n_signals": len(signals),
@@ -101,6 +117,8 @@ def score_day(date: str) -> dict:
         "abstained": not weights,
         "wda": round(wda_num / wda_den, 4) if wda_den else None,
         "weighted_return": round(port_ret, 5) if weights else 0.0,
+        "benchmark": bench,  # 항상매수 동일비중: return / up_ratio(=벤치 WDA)
+        "wda_excess": round(wda_num / wda_den - bench["up_ratio"], 4) if (wda_den and bench) else None,
         "positions": rows,
     }
 
@@ -115,7 +133,9 @@ def main(start: str, end: str | None = None):
             continue  # 재생 안 된 날 스킵
         r = score_day(date)
         results.append(r)
-        tag = "기권(현금)" if r["abstained"] else f"WDA={r['wda']} ret={r['weighted_return']:+.4f}"
+        b = r["benchmark"] or {}
+        tag = "기권(현금)" if r["abstained"] else (
+            f"WDA={r['wda']} (벤치 {b.get('up_ratio')}, 초과 {r['wda_excess']}) ret={r['weighted_return']:+.4f}")
         print(f"{date}  신호 {r['n_signals']}건 → 포지션 {r['n_positions']}개  {tag}")
 
     if not results:
@@ -123,8 +143,10 @@ def main(start: str, end: str | None = None):
     scored = [r for r in results if r["wda"] is not None]
     if scored:
         avg_wda = sum(r["wda"] for r in scored) / len(scored)
+        exc = [r["wda_excess"] for r in scored if r["wda_excess"] is not None]
+        avg_exc = sum(exc) / len(exc) if exc else float("nan")
         print(f"\n요약: {len(results)}일 중 기권 {sum(r['abstained'] for r in results)}일, "
-              f"평균 WDA {avg_wda:.4f}")
+              f"평균 WDA {avg_wda:.4f}, 평균 초과 WDA(vs 항상매수) {avg_exc:+.4f}")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = OUT_DIR / f"scores_{start}_{end}.json"
     out.write_text(json.dumps(results, ensure_ascii=False, indent=2))

@@ -39,6 +39,9 @@ class DataAnalysisAgentOutput:
     context_string: str
     references: List[Dict[str, Any]]
     batch_summaries: List[Dict[str, Any]]
+    # KR 확장: 빈 팩터의 원인 구분 — "" (정상) / no_data (원천 0건) /
+    # processing_error (배치 생성·처리 실패). 빈 결과를 해석 가능하게.
+    empty_reason: str = ""
 
     def to_dict(self):
         return {
@@ -48,7 +51,8 @@ class DataAnalysisAgentOutput:
             "bias_goal": self.bias_goal,
             "context_string": self.context_string,
             "references": self.references,
-            "batch_summaries": self.batch_summaries
+            "batch_summaries": self.batch_summaries,
+            "empty_reason": self.empty_reason
         }
 
 @dataclass
@@ -289,7 +293,9 @@ class DataAnalysisAgent:
         try:
             if not state["batch_results"]:
                 # 업스트림 버그 수정: 문자열 반환 시 langgraph InvalidUpdateError로 전체 크래시.
-                # 데이터 0건인 날은 빈 팩터로 상태를 정상 반환한다.
+                # 데이터 0건인 날은 빈 팩터로 상태를 정상 반환하되, 원인을 남긴다.
+                data_df = state.get("data_df")
+                reason = "no_data" if (data_df is None or len(data_df) == 0) else "processing_error"
                 state["summary"] = ""
                 state["result"] = DataAnalysisAgentOutput(
                     agent_name=self.config.agent_name,
@@ -298,7 +304,8 @@ class DataAnalysisAgent:
                     bias_goal=state["bias_goal"],
                     context_string="",
                     references=[],
-                    batch_summaries=[]
+                    batch_summaries=[],
+                    empty_reason=reason
                 )
                 return state
             
@@ -516,7 +523,9 @@ class DataAnalysisAgent:
             if pub_time.endswith("23:59:59"):
                 pub_time = pub_time.split(" ")[0]
             doc_context += f"<doc id={doc_id}> Title: {title}\nPublish Time: {pub_time}\nContent: {content}</doc>\n"
-            doc_raw_content += f"Title: {title}\nPublish Time: {pub_time}\nContent: {content}\n"
+            # KR 수정: 원문 통과 경로에서도 [id]를 보존해 인용·references 추출이
+            # 가능하게 한다 (문서가 적은 소스 — 특히 DART — 가 인용 불가가 되던 문제)
+            doc_raw_content += f"[{doc_id}] Title: {title}\nPublish Time: {pub_time}\nContent: {content}\n"
         
         if len(doc_context) <= self.config.summary_target_tokens and not bias_goal:
             return doc_raw_content
