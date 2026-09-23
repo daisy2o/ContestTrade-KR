@@ -181,7 +181,8 @@ Requirements:
 7. Output result in language: {language}
 
 Fidelity rules (violations corrupt downstream decisions):
-- Keep every number, date, and direction EXACTLY as the source document states. Never attach a number to a different date or merge an intraday figure with another day's move. An event's date is the date stated in the article body, not the publish date.
+- Keep every number, date, and direction EXACTLY as the source document states. Never attach a number to a different date or merge an intraday figure with another day's move. An event's date is the date stated in the article body (or its [보도일] tag), NOT the "Publish Time" field — Publish Time is when the document became available, often one day later.
+- Distinguish intraday snapshots from closing values: a price quoted "오전 X시 현재" is an intraday figure — never present it as a closing price or as "기준가/마감" of any date.
 - Never widen a metric's scope (e.g. NAND market share must not become "semiconductor market share"; a combined figure for several executives must not become one company's or one person's figure).
 - Preserve increase/decrease and record-high/record-low exactly; do not soften or reverse them.
 - If unsure of a date or figure, quote the source sentence instead of restating it.
@@ -225,7 +226,8 @@ Requirements:
 
 Please output {final_description} directly, do not include any other content.
 Fidelity rules (violations corrupt downstream decisions):
-- Keep every number, date, and direction EXACTLY as the source document states. Never attach a number to a different date or merge an intraday figure with another day's move. An event's date is the date stated in the article body, not the publish date.
+- Keep every number, date, and direction EXACTLY as the source document states. Never attach a number to a different date or merge an intraday figure with another day's move. An event's date is the date stated in the article body (or its [보도일] tag), NOT the "Publish Time" field — Publish Time is when the document became available, often one day later.
+- Distinguish intraday snapshots from closing values: a price quoted "오전 X시 현재" is an intraday figure — never present it as a closing price or as "기준가/마감" of any date.
 - Never widen a metric's scope (e.g. NAND market share must not become "semiconductor market share"; a combined figure for several executives must not become one company's or one person's figure).
 - Preserve increase/decrease and record-high/record-low exactly; do not soften or reverse them.
 - If unsure of a date or figure, quote the source sentence instead of restating it.
@@ -240,6 +242,8 @@ Evidence discipline (violations make your evidence worthless to the judger):
 - Never flip direction to fit your belief: if the source reports a decline or record-high results, do not describe it as a rise or a slowdown. Contradicting evidence must be reported as-is or omitted, never rewritten.
 - Do not generalize a segment metric to a whole market (e.g. NAND share is not "semiconductor market share").
 - Attribute each number to its real origin: tool-computed statistics cite the tool, news claims cite the article source.
+- Copy each tool statistic verbatim for EXACTLY the symbol and the window the tool reported — never transfer a value to another stock or restate it over a different period.
+- Never state claims absent from your sources or tool outputs: no invented streaks ("N일 연속"), no comparisons to unmeasured baselines ("시장 평균보다"), no implication reversals (a ratio below 1 is BELOW average).
 
 Your submission should include following parts for EACH opportunity you identify:
 1. Does valuable opportunity exist in the market today?

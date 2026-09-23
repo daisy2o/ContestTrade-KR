@@ -26,6 +26,11 @@ LOOKBACK_DAYS = 3
 
 
 class KrFactivaNews(KRDataSourceBase):
+    def cache_version(self) -> str:
+        # pub_time(이용가능일, D+1)과 별도로 본문에 진짜 보도일을 표기 — 요약기가
+        # 이용가능일을 사건일로 오독해 날짜를 +1일 이동시키던 체계 원인의 수정
+        return "v2-repdate"
+
     def __init__(self, universe_names: dict | None = None, factiva_code_map: dict | None = None, cache_dir=None):
         """universe_names/factiva_code_map이 None이면 유니버스 CSV에서 자동 로드 (파이프라인 무인자 경로)."""
         super().__init__("kr_factiva_news", cache_dir=cache_dir)
@@ -80,7 +85,7 @@ class KrFactivaNews(KRDataSourceBase):
             names = ", ".join(self.universe_names[c] for c in codes)
             rows.append({
                 "title": f"[{r['source']}] ({names}) {r['headline']}",
-                "content": r["body"][:BODY_CHARS],
+                "content": f"[보도일 {r['pd_date']}] " + r["body"][:BODY_CHARS],
                 "pub_time": usable_from,
                 "url": f"factiva://{r['an']}",
             })

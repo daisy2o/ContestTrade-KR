@@ -62,4 +62,6 @@ def test_d_plus_one_rule(fake_db, tmp_path):
 
 def test_body_truncated_to_300(fake_db, tmp_path):
     df = make(tmp_path).get_data_sync("2026-05-29 09:00:00")
-    assert all(len(c) <= 300 for c in df["content"])
+    # 본문 300자 캡 + "[보도일 YYYY-MM-DD] " 접두(18자) 허용
+    assert all(len(c) <= 300 + 18 for c in df["content"])
+    assert all(c.startswith("[보도일 ") for c in df["content"])
