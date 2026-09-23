@@ -19,6 +19,9 @@ import pandas as pd
 DEFAULT_UNIVERSE_CSV = (
     Path(__file__).parents[2] / "data_collection" / "universe" / "ktop30.csv"
 )
+DEFAULT_ALIAS_CSV = (
+    Path(__file__).parents[2] / "data_collection" / "universe" / "aliases_ktop30.csv"
+)
 
 _CODE_RE = re.compile(r"^\d{1,6}$")
 _HANGUL_RE = re.compile(r"[가-힣]")
@@ -70,6 +73,43 @@ def load_universe(csv_path=None) -> dict:
     if not universe:
         raise ValueError(f"유효한 종목이 0개입니다: {path}")
     return universe
+
+
+def load_alias_table(universe: dict, alias_csv_path=None) -> list:
+    """종목 태깅용 통합 별칭 테이블: [(표기, 종목코드, [제외어, ...]), ...].
+
+    구성 = 유니버스 정식명 + 별칭 CSV(aliases_ktop30.csv). CSV 컬럼:
+      alias, ticker, exclude(|구분 복수 가능), note
+    정식명과 별칭을 한 테이블로 합치는 이유: 제외어 가드(위양성 방지)를
+    정식명에도 적용하기 위해 (예: '카카오'가 '카카오뱅크' 메시지에 오매핑되는 문제).
+    CSV에 정식명과 같은 표기가 있으면 그 행(제외어 포함)이 정식명 항목을 대체한다.
+
+    검증: 한 표기가 서로 다른 두 종목을 가리키면 ValueError (조용한 오매핑 금지).
+    유니버스에 없는 ticker 행은 경고 없이 건너뜀 (유니버스 축소·교체 대응).
+    """
+    entries = {name: (code, []) for code, name in universe.items() if name}
+
+    path = Path(alias_csv_path) if alias_csv_path else DEFAULT_ALIAS_CSV
+    if path.exists():
+        df = pd.read_csv(path, dtype=str, encoding="utf-8-sig").fillna("")
+        for _, row in df.iterrows():
+            alias = str(row["alias"]).strip()
+            code = str(row["ticker"]).strip().zfill(6)
+            if not alias or code not in universe:
+                continue
+            excludes = [e for e in str(row.get("exclude", "")).split("|") if e.strip()]
+            if alias in entries and entries[alias][0] != code:
+                raise ValueError(
+                    f"별칭 충돌: '{alias}' → {entries[alias][0]} vs {code} "
+                    f"(한 표기가 두 종목을 가리킴 — {path} 수정 필요)"
+                )
+            entries[alias] = (code, excludes)
+
+    # 긴 표기 우선 정렬: '포스코홀딩스'가 '포스코'보다 먼저 검사되도록
+    return sorted(
+        [(a, c, ex) for a, (c, ex) in entries.items()],
+        key=lambda t: -len(t[0]),
+    )
 
 
 def load_factiva_code_map(csv_path=None) -> dict:

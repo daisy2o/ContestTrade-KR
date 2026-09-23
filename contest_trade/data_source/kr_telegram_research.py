@@ -31,10 +31,13 @@ CHANNELS = ["hanaresearch", "shinhanresearch", "kiwoomresearch", "meritz_researc
 LOOKBACK_DAYS = 2  # trigger 직전 며칠치를 팩터 원료로 볼지
 
 
-def tag_stock_codes(text: str, universe_names: dict) -> list:
+def tag_stock_codes(text: str, universe_names: dict, alias_table: list | None = None) -> list:
     """텍스트에서 언급된 종목코드를 규칙 기반으로 추출.
 
     universe_names: {종목코드: 종목명} — D41 2단계용.
+    alias_table: kr_universe.load_alias_table() 산출물. None이면 정식명만으로
+    즉석 구성 (하위 호환). 제외어 가드: 별칭이 텍스트에 있어도 제외어가 함께
+    있으면 그 별칭은 무효 (예: '카카오' + '카카오뱅크' → 카카오 매핑 안 함).
     반환: 텍스트에서 발견된 종목코드 리스트 (중복 제거, 순서 보존).
     """
     if not text:
@@ -44,11 +47,16 @@ def tag_stock_codes(text: str, universe_names: dict) -> list:
     for code in CODE_RE.findall(text):
         if code in universe_names and code not in found:
             found.append(code)
-    # 2단계: 코드가 없는 경우 종목명으로 보완
+    # 2단계: 코드가 없는 경우 정식명·별칭으로 보완 (긴 표기 우선, 제외어 가드)
     if not found:
-        for code, name in universe_names.items():
-            if name and name in text and code not in found:
-                found.append(code)
+        if alias_table is None:
+            alias_table = [(n, c, []) for c, n in universe_names.items() if n]
+        for alias, code, excludes in alias_table:
+            if code in found or alias not in text:
+                continue
+            if any(ex in text for ex in excludes):
+                continue
+            found.append(code)
     return found
 
 
@@ -83,6 +91,8 @@ class KrTelegramResearch(KRDataSourceBase):
             from utils.kr_universe import load_universe
             universe_names = load_universe()
         self.universe_names = universe_names
+        from utils.kr_universe import load_alias_table
+        self.alias_table = load_alias_table(universe_names)
 
     def fetch_raw(self, trigger_time: str) -> pd.DataFrame:
         trigger_dt = pd.to_datetime(trigger_time) - timedelta(hours=9)  # KST -> UTC
@@ -92,7 +102,7 @@ class KrTelegramResearch(KRDataSourceBase):
 
         rows = []
         for _, r in raw.iterrows():
-            codes = tag_stock_codes(r["text"], self.universe_names)
+            codes = tag_stock_codes(r["text"], self.universe_names, self.alias_table)
             if not codes:
                 continue  # 유니버스 밖/태깅 실패 메시지는 팩터 원료에서 제외
             pub_time_kst = (
