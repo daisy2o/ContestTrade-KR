@@ -83,3 +83,18 @@ def test_alias_conflict_raises():
 def test_backward_compat_without_table():
     # 테이블 없이 호출하면 기존 동작(정식명 매칭) 유지
     assert tag_stock_codes("카카오 목표주가", UNIVERSE) == ["035720"]
+
+
+# ── 리뷰 회귀 사례 (2026-09-24 외부 리뷰 P2 두 건) ──
+
+def test_exclude_does_not_kill_independent_mention():
+    uni, table = _alias_table()
+    # 제외어(현대차증권)가 있어도 독립적으로 등장한 현대차는 매핑돼야 한다
+    assert tag_stock_codes("현대차증권: 현대차 목표주가 상향", uni, table) == ["005380"]
+    assert tag_stock_codes("카카오 실적 개선. 카카오뱅크와 사업 비교", uni, table) == ["035720"]
+
+
+def test_code_match_does_not_skip_other_names():
+    uni, table = _alias_table()
+    # 코드로 잡힌 종목이 있어도 다른 종목의 이름·별칭 언급은 계속 찾아야 한다
+    assert tag_stock_codes("삼성전자(005930)와 하이닉스 실적 비교", uni, table) == ["005930", "000660"]

@@ -96,6 +96,15 @@ async def main(trigger_date: str):
     trigger = f"{trigger_date} 09:00:00"
     preexisting = set(_artifact_paths(trigger_date))  # 드라이런 이전부터 있던 산출물 보호
     print(f"=== KR 드라이런: {trigger} (LLM 모의, 데이터 실물) ===")
+    try:
+        await _run_and_verify(trigger, trigger_date, calls)
+    finally:
+        # 중간 크래시여도 이미 생성된 가짜 산출물은 반드시 격리 (외부 리뷰 P1)
+        _quarantine_new_artifacts(trigger_date, preexisting)
+
+
+async def _run_and_verify(trigger: str, trigger_date: str, calls: dict):
+    from main import SimpleTradeCompany
     company = SimpleTradeCompany()
     state = await company.run_company(trigger)
 
@@ -119,7 +128,6 @@ async def main(trigger_date: str):
         print(f"\n✅ 드라이런 완주 — 조립 전 구간 이상 없음{note}")
     else:
         print("\n⚠️ 드라이런 불완전 — 위 수치 확인 필요")
-    _quarantine_new_artifacts(trigger_date, preexisting)
 
 
 if __name__ == "__main__":

@@ -6,12 +6,11 @@
 
 - Python 3.11 이상, git
 - 본인 OpenAI API 키 (팀 규칙: 키는 각자 발급, 로컬에만 저장, 주간 비용 공유)
-- 저장소 접근 권한 (private repo 초대 필요 — 하희정에게 GitHub 아이디 전달)
+- 저장소 접근 권한: 불필요 (팀 저장소는 공개)
 
 ## 1. 클론 및 설치
 
-팀 저장소 기준입니다 (하희정 작업이 병합되기 전이라면, 아래 주소 대신
-`https://github.com/daisy2o/ContestTrade-KR.git`의 `feat/HJ` 브랜치를 클론하세요).
+팀 저장소 `main` 병합 후 기준:
 
 ```bash
 git clone https://github.com/platina310/ContestTrade-KR.git
@@ -19,6 +18,13 @@ cd ContestTrade-KR
 python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt -r requirements_kr.txt
+```
+
+하희정 작업(feat/HJ)이 아직 `main`에 병합되기 전이라면 위 대신 이걸 그대로 복사:
+
+```bash
+git clone -b feat/HJ https://github.com/daisy2o/ContestTrade-KR.git
+cd ContestTrade-KR
 ```
 
 `requirements_kr.txt`에 KR 실행에 추가로 필요한 패키지(finance-datareader 등)가
@@ -73,8 +79,8 @@ CONTEST_TRADE_MARKET=KR-Stock python dryrun_kr.py 2026-05-29
 
 가짜 LLM으로 전체 파이프라인이 크래시 없이 도는지 확인합니다. 마지막 줄에
 `✅ 드라이런 완주`가 나오면 정상. 드라이런이 새로 만든 가짜 팩터·리포트는
-종료 시 `agents_workspace/_dryrun_quarantine/`으로 자동 격리되므로,
-실제 실행이 가짜 결과를 재사용할 걱정은 없습니다.
+정상 종료든 중간 오류든 종료 시 `agents_workspace/_dryrun_quarantine/`으로
+자동 격리됩니다 (강제 종료(Ctrl+C 연타 등)한 경우에만 해당 날짜 파일을 직접 확인).
 
 ### 4-2. 실제 하루 실행 (약 $0.1 이하 예상)
 

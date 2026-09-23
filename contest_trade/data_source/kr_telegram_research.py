@@ -47,15 +47,20 @@ def tag_stock_codes(text: str, universe_names: dict, alias_table: list | None = 
     for code in CODE_RE.findall(text):
         if code in universe_names and code not in found:
             found.append(code)
-    # 2단계: 코드가 없는 경우 정식명·별칭으로 보완 (긴 표기 우선, 제외어 가드)
-    if not found:
-        if alias_table is None:
-            alias_table = [(n, c, []) for c, n in universe_names.items() if n]
-        for alias, code, excludes in alias_table:
-            if code in found or alias not in text:
-                continue
-            if any(ex in text for ex in excludes):
-                continue
+    # 2단계: 정식명·별칭 매칭 — 코드가 발견됐어도 '다른' 종목의 이름 언급은 계속 찾는다
+    # (예: "삼성전자(005930)와 하이닉스 비교" → 둘 다). 긴 표기 우선.
+    if alias_table is None:
+        alias_table = [(n, c, []) for c, n in universe_names.items() if n]
+    for alias, code, excludes in alias_table:
+        if code in found:
+            continue
+        # 제외어 가드: 제외어 '부분'으로 나온 표기만 무효화하고, 독립적으로
+        # 등장한 언급은 살린다 — 제외어를 지운 잔여 텍스트에서 별칭을 찾는 방식
+        # (예: "현대차증권: 현대차 목표가 상향" → '현대차증권' 제거 후에도 '현대차' 존재 → 매핑)
+        masked = text
+        for ex in excludes:
+            masked = masked.replace(ex, " ")
+        if alias in masked:
             found.append(code)
     return found
 
@@ -93,6 +98,17 @@ class KrTelegramResearch(KRDataSourceBase):
         self.universe_names = universe_names
         from utils.kr_universe import load_alias_table
         self.alias_table = load_alias_table(universe_names)
+
+    _TAGGING_LOGIC_VERSION = "tag-v3"  # tag_stock_codes 규칙 변경 시 올릴 것
+
+    def cache_version(self) -> str:
+        """태깅 규칙(로직 버전)·별칭 사전·유니버스가 바뀌면 캐시가 자동 무효화되도록
+        내용 해시로 버전을 만든다 (외부 리뷰 P1: 규칙 개선이 캐시에 안 먹는 문제)."""
+        import hashlib
+        h = hashlib.sha256(self._TAGGING_LOGIC_VERSION.encode())
+        for alias, code, excludes in self.alias_table:
+            h.update(f"{alias}|{code}|{'|'.join(excludes)};".encode())
+        return h.hexdigest()[:10]
 
     def fetch_raw(self, trigger_time: str) -> pd.DataFrame:
         trigger_dt = pd.to_datetime(trigger_time) - timedelta(hours=9)  # KST -> UTC

@@ -34,13 +34,24 @@ class KRDataSourceBase(DataSourceBase):
         불필요한 과대 조회를 피하기 위해 소스 측 기간 제한을 함께 걸 것."""
         raise NotImplementedError
 
+    def cache_version(self) -> str:
+        """캐시 무효화 버전 — 태깅·필터 로직이나 참조 사전(별칭 CSV 등)이 바뀌면
+        값이 달라져야 한다. 안 그러면 규칙을 고쳐도 캐시된 옛 결과가 계속 쓰인다
+        (2026-09-24 외부 리뷰 P1 재현 사례). 서브클래스에서 내용 해시로 오버라이드."""
+        return "v1"
+
+    def _versioned_cache_file(self, trigger_time: str):
+        name = trigger_time.replace(" ", "_").replace(":", "-")
+        return self.data_cache_dir / f"{name}__{self.cache_version()}.pkl"
+
     async def get_data(self, trigger_time: str) -> pd.DataFrame:
         """업스트림 계약: data_analysis_agent가 `await source.get_data(...)`로 호출.
         동기 구현이면 DataFrame이 그대로 반환돼 await에서 TypeError — async 필수."""
         return self.get_data_sync(trigger_time)
 
     def get_data_sync(self, trigger_time: str) -> pd.DataFrame:
-        cached = self.get_data_cached(trigger_time)
+        cache_file = self._versioned_cache_file(trigger_time)
+        cached = pd.read_pickle(cache_file) if cache_file.exists() else None
         if cached is not None:
             return cached
 
@@ -69,5 +80,5 @@ class KRDataSourceBase(DataSourceBase):
         df = df.sort_values("pub_time").reset_index(drop=True)
         # 빈 결과는 캐시하지 않음 (일시 장애를 박제하지 않기 — kr_data_utils와 동일 원칙)
         if len(df) > 0:
-            self.save_data_cached(trigger_time, df)
+            df.to_pickle(cache_file)
         return df

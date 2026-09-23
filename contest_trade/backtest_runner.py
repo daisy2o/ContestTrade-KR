@@ -35,7 +35,11 @@ def config_fingerprint(trigger_hour: str = "09:00:00") -> str:
     root = Path(__file__).parent
     for p in [root.parent / "config_kr.yaml",
               root / "config" / "belief_list_kr.json",
-              root / "config" / "market_config_kr.yaml"]:
+              root / "config" / "market_config_kr.yaml",
+              # 데이터 해석 규칙도 실험 조건이다: 유니버스·종목 별칭 사전이 바뀌면
+              # 팩터 입력이 달라지므로 지문에 포함 (외부 리뷰 지적 수용)
+              root.parent / "data_collection" / "universe" / "ktop30.csv",
+              root.parent / "data_collection" / "universe" / "aliases_ktop30.csv"]:
         if p.exists():
             h.update(p.read_bytes())
     h.update(trigger_hour.encode())
@@ -46,8 +50,9 @@ async def run_replay(start_date: str, end_date: str, trigger_hour: str = "09:00:
     from config.config import cfg
     if not cfg.llm.get("api_key"):
         sys.exit(
-            "[중단] config_kr.yaml에 LLM api_key가 없습니다.\n"
-            "US E2E 실행에 쓴 팀 OpenAI 키를 로컬 config_kr.yaml에 넣어주세요 (커밋 금지)."
+            "[중단] LLM api_key가 없습니다.\n"
+            "환경변수 OPENAI_API_KEY를 설정하거나(권장), config_kr.yaml의 llm.api_key에\n"
+            "본인 키를 넣어주세요 (파일 방식은 커밋 금지 — RUN_KR_PILOT.md §3 참고)."
         )
     from utils.kr_data_utils import GLOBAL_KR_CLIENT
     from main import SimpleTradeCompany
