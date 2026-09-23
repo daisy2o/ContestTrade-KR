@@ -99,7 +99,7 @@ async def main(trigger_date: str):
     try:
         await _run_and_verify(trigger, trigger_date, calls)
     finally:
-        # 중간 크래시여도 이미 생성된 가짜 산출물은 반드시 격리 (외부 리뷰 P1)
+        # 중간 크래시여도 이미 생성된 가짜 산출물은 반드시 격리
         _quarantine_new_artifacts(trigger_date, preexisting)
 
 

@@ -85,7 +85,7 @@ def test_backward_compat_without_table():
     assert tag_stock_codes("카카오 목표주가", UNIVERSE) == ["035720"]
 
 
-# ── 리뷰 회귀 사례 (2026-09-24 외부 리뷰 P2 두 건) ──
+# ── 제외어·다중 종목 회귀 사례 ──
 
 def test_exclude_does_not_kill_independent_mention():
     uni, table = _alias_table()

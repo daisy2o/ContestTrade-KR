@@ -36,8 +36,8 @@ class KRDataSourceBase(DataSourceBase):
 
     def cache_version(self) -> str:
         """캐시 무효화 버전 — 태깅·필터 로직이나 참조 사전(별칭 CSV 등)이 바뀌면
-        값이 달라져야 한다. 안 그러면 규칙을 고쳐도 캐시된 옛 결과가 계속 쓰인다
-        (2026-09-24 외부 리뷰 P1 재현 사례). 서브클래스에서 내용 해시로 오버라이드."""
+        값이 달라져야 한다. 안 그러면 규칙을 고쳐도 캐시된 옛 결과가 계속 쓰인다.
+        서브클래스에서 내용 해시로 오버라이드."""
         return "v1"
 
     def _versioned_cache_file(self, trigger_time: str):

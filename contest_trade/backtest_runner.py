@@ -37,7 +37,7 @@ def config_fingerprint(trigger_hour: str = "09:00:00") -> str:
               root / "config" / "belief_list_kr.json",
               root / "config" / "market_config_kr.yaml",
               # 데이터 해석 규칙도 실험 조건이다: 유니버스·종목 별칭 사전이 바뀌면
-              # 팩터 입력이 달라지므로 지문에 포함 (외부 리뷰 지적 수용)
+              # 팩터 입력이 달라지므로 지문에 포함
               root.parent / "data_collection" / "universe" / "ktop30.csv",
               root.parent / "data_collection" / "universe" / "aliases_ktop30.csv"]:
         if p.exists():

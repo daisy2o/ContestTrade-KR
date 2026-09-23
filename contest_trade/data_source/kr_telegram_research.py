@@ -103,7 +103,7 @@ class KrTelegramResearch(KRDataSourceBase):
 
     def cache_version(self) -> str:
         """태깅 규칙(로직 버전)·별칭 사전·유니버스가 바뀌면 캐시가 자동 무효화되도록
-        내용 해시로 버전을 만든다 (외부 리뷰 P1: 규칙 개선이 캐시에 안 먹는 문제)."""
+        내용 해시로 버전을 만든다 — 규칙을 고쳤는데 캐시된 옛 결과가 쓰이는 사고 방지."""
         import hashlib
         h = hashlib.sha256(self._TAGGING_LOGIC_VERSION.encode())
         for alias, code, excludes in self.alias_table:
