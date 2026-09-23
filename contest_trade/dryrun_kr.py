@@ -7,7 +7,7 @@ KR 파이프라인 드라이런 — LLM만 가짜, 나머지 전부 진짜 (키 
 검증 범위: config 로딩 → 데이터 에이전트 3종(실데이터: DART 라이브·Factiva·텔레그램)
 → 팩터 전달 → 리서치 에이전트 3종(belief) ReAct → 신호 저장 → 신호 파서 검증.
 
-실행: CONTEST_TRADE_MARKET=KR-Stock python dryrun_kr.py [트리거일 기본 2026-05-29]
+실행: CONTEST_TRADE_MARKET=KR-Stock python dryrun_kr.py [트리거일 기본 2026-05-29] — 판단시각 08:30 기본
 """
 import asyncio
 import os
@@ -59,7 +59,7 @@ def make_mock():
 def _artifact_paths(trigger_date: str):
     """이 날짜의 드라이런 산출물(팩터·리포트) 경로 목록."""
     ws = Path(__file__).parent / "agents_workspace"
-    stamp = f"{trigger_date}_09-00-00.json"
+    stamp = f"{trigger_date}_*.json"
     return [p for d in ("factors", "reports") if (ws / d).exists()
             for p in (ws / d).rglob(stamp)]
 
@@ -93,7 +93,7 @@ async def main(trigger_date: str):
         llm_model.GLOBAL_VISION_LLM.a_run = mock
 
     from main import SimpleTradeCompany
-    trigger = f"{trigger_date} 09:00:00"
+    trigger = f"{trigger_date} 08:30:00"
     preexisting = set(_artifact_paths(trigger_date))  # 드라이런 이전부터 있던 산출물 보호
     print(f"=== KR 드라이런: {trigger} (LLM 모의, 데이터 실물) ===")
     try:
@@ -112,7 +112,7 @@ async def _run_and_verify(trigger: str, trigger_date: str, calls: dict):
     import json
     from evaluation.signal_parser import parse_final_result
     reports_dir = Path(__file__).parent / "agents_workspace" / "reports"
-    stamp = f"{trigger_date}_09-00-00.json"
+    stamp = f"{trigger_date}_*.json"
     saved = sorted(reports_dir.rglob(stamp)) if reports_dir.exists() else []
     print(f"\nLLM 모의 호출 {calls['n']}회 — 단계별: {calls['by_kind']}")
     print(f"리포트 파일 저장: {len(saved)}개")

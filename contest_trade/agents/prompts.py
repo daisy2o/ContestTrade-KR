@@ -222,7 +222,7 @@ Please output {final_description} directly, do not include any other content.
 """
 
 prompt_for_research_invest_task = """
-As a professional researcher with specific belief, you need to find opportunities in the market today. You need to submit up to 5 critical analysis suggestions to the investor.
+As a professional researcher with specific belief, you need to find opportunities in the market today. You need to submit 0 to 5 critical analysis suggestions to the investor. If you find NO genuine opportunity today, submitting zero suggestions (empty signals) is the correct answer — do not fabricate opportunities.
 
 Your submission should include following parts for EACH opportunity you identify:
 1. Does valuable opportunity exist in the market today?
@@ -240,7 +240,7 @@ prompt_for_research_invest_output_format = """
 <signals>
 <signal>
 <has_opportunity>xxx</has_opportunity>  # yes or no
-<action>xxx</action>  # buy or sell
+<action>xxx</action>  # buy = 상승 예측 / sell = 하락 예측 (방향 '예측'이며 실제 매매·공매도 지시가 아님)
 <symbol_code>xxx</symbol_code>     # such as 600519.SH or TSLA
 <symbol_name>xxx</symbol_name>  # such as 贵州茅台 or tesla
 <evidence_list>        # no more than 20 evidences
@@ -253,9 +253,10 @@ prompt_for_research_invest_output_format = """
 <limitation>xxx</limitation>   # limitations of your suggestion, such as risk, etc.
 ...
 </limitations>
-<probability>xxx</probability>  # 0-100
+<probability>xxx</probability>  # 0-100: 평가 구간(당일 시가 → 다음 거래일 종가)에서 '선택한 방향'이 맞을 확률. 가격 불변이면 무적중
 </signal>
-<!-- Repeat <signal>...</signal> block for each opportunity you identify, up to 5 signals -->
+<!-- Repeat <signal>...</signal> block for each opportunity you identify, 0 to 5 signals -->
+<!-- Submitting ZERO signals is a valid answer when no genuine opportunity exists: output <signals></signals> -->
 <!-- Only include signals for genuine opportunities you find in the market -->
 </signals>
 """

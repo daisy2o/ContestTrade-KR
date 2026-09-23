@@ -6,7 +6,8 @@
 
 사용법:
   CONTEST_TRADE_MARKET=KR-Stock python backtest_runner.py 2026-05-04 2026-05-08
-  → 구간 내 KR 거래일마다 09:00 trigger로 전체 파이프라인 실행.
+  → 구간 내 KR 거래일마다 08:30 trigger로 전체 파이프라인 실행
+  (08:30 입력 마감 → 개장 전 판단 완료 가정 → 당일 시가 평가. 파일럿 기본값).
   신호는 에이전트가 agents_workspace/ 아래 trigger_time별로 저장(원본 구조 재사용).
 
 전제: config_kr.yaml(로컬 사본)에 LLM api_key 설정. 키 없으면 시작 전에 명시적 중단.
@@ -26,7 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 
-def config_fingerprint(trigger_hour: str = "09:00:00") -> str:
+def config_fingerprint(trigger_hour: str = "08:30:00") -> str:
     """실험 조건의 지문 (D26 replay ID) — belief/config_kr/market_config + 판단 시각 해시.
 
     판단 시각은 입력에 포함되는 정보의 마감선이므로 설정 파일과 동급의 조건이다
@@ -95,7 +96,7 @@ def _git_commit() -> str:
         return ""
 
 
-async def run_replay(start_date: str, end_date: str, trigger_hour: str = "09:00:00"):
+async def run_replay(start_date: str, end_date: str, trigger_hour: str = "08:30:00"):
     from datetime import datetime
     from config.config import cfg
     if not cfg.llm.get("api_key"):

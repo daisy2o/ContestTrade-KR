@@ -105,11 +105,11 @@ class ResearchDataManager:
         """
         # KR 수정: 저장기는 콜론을 대시로 치환("09-00-00") — 원본 로더는 "09:00:00"을
         # 찾아 항상 미발견이었다 (죽은 코드 원인). 두 형식 모두 시도.
-        signal_file_pattern = f"{date_str}_09-00-00.json"
-        signal_file = self.reports_dir / agent_name / signal_file_pattern
-        
-        if not signal_file.exists():
+        # 판단 시각이 바뀌어도 동작하도록 날짜 프리픽스 글롭 (하루 1파일 전제)
+        candidates = sorted((self.reports_dir / agent_name).glob(f"{date_str}_*.json"))
+        if not candidates:
             return None
+        signal_file = candidates[0]
         
         with open(signal_file, 'r', encoding='utf-8') as f:
             signal_raw = json.load(f)

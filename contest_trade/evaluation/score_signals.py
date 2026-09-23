@@ -5,8 +5,11 @@
 D43-lite 포트폴리오 규칙(상쇄 → 확신도 비례 가중 → 무신호 시 현금)으로
 일별 WDA와 가중 수익률을 계산한다.
 
-[잠정 정의 — D8/D22 팀 확정 대기]
-- 진입: T일 시가(09:00 결정 직후 체결 가정), 청산: T+1일 종가.
+[파일럿 기본값 — 2026-09-24 확정, 공매도 연구 범위만 팀 안건 잔존]
+- 시간 규칙: 08:30 입력 마감 → 개장 전 판단 완료 가정 → 진입 T일 시가, 청산 T+1일 종가.
+- 의미론: action은 방향 '예측'(buy=상승, sell=하락, 거래 지시 아님),
+  probability는 선택한 방향의 적중 확률, 가격 불변은 무적중.
+- 기권: 정상 기권(현금)과 실행·형식 실패를 day_status로 구분.
 - 확신도 가중치: max(0, probability − 50). 모두 0이면 현금(기권일).
 - 에이전트 간 가중: 균등 (D22 잠정).
 주의: 여기서의 가격 접근은 채점 전용(SCORING-ONLY)이다. 의사결정 시점에는
@@ -29,12 +32,18 @@ OUT_DIR = Path(__file__).parent / "out"
 
 
 def load_day_signals(date: str):
-    """해당 일자 리포트 전체에서 유효 신호 수집 (에이전트 균등 가중 잠정)."""
-    stamp = f"{date}_09-00-00.json"
+    """해당 일자 리포트 전체에서 유효 신호 수집 (에이전트 균등 가중 잠정).
+
+    반환: (signals, meta) — meta로 정상 기권과 실행·형식 실패를 구분한다
+    (실행 실패를 기권으로 계산하면 기권률이 오염된다)."""
     signals = []
-    for p in sorted(REPORTS_DIR.rglob(stamp)):
+    meta = {"n_reports": 0, "n_raw": 0, "n_well_formed": 0}
+    for p in sorted(REPORTS_DIR.rglob(f"{date}_*.json")):
+        meta["n_reports"] += 1
         d = json.loads(p.read_text())
         r = parse_final_result(d.get("final_result") or "")
+        meta["n_raw"] += len(r.signals)
+        meta["n_well_formed"] += sum(1 for x in r.signals if x.is_well_formed)
         for s in r.valid_signals:
             signals.append({
                 "agent": p.parent.name,
@@ -43,7 +52,7 @@ def load_day_signals(date: str):
                 "action": s.action,           # buy | sell
                 "prob": s.probability,        # 0~100
             })
-    return signals
+    return signals, meta
 
 
 def build_portfolio(signals):
@@ -95,15 +104,25 @@ def benchmark_day(date: str) -> dict | None:
 
 
 def score_day(date: str) -> dict:
-    signals = load_day_signals(date)
+    signals, meta = load_day_signals(date)
     weights = build_portfolio(signals)
+    # 일 상태: scored / abstained(정상 기권 — 형식은 정상인데 신호·포지션 없음)
+    #          / format_failure(출력은 있었으나 well-formed 0)
+    if weights:
+        day_status = "scored"
+    elif meta["n_raw"] > 0 and meta["n_well_formed"] == 0:
+        day_status = "format_failure"
+    else:
+        day_status = "abstained"
     rows, wda_num, wda_den, port_ret = [], 0.0, 0.0, 0.0
     for sym, w in weights.items():
         r = t1_return(sym, date)
         if r is None:
             rows.append({"symbol": sym, "weight": round(w, 4), "t1_return": None, "hit": None})
             continue
-        hit = (r > 0) == (w > 0)  # 방향 적중: 가중치 부호 vs 실현 수익률 부호
+        # 방향 적중: 상승 예측(w>0)은 r>0, 하락 예측(w<0)은 r<0일 때만.
+        # 가격 불변(r==0)은 어느 방향도 무적중 (의미론 규칙)
+        hit = (r > 0 and w > 0) or (r < 0 and w < 0)
         wda_num += abs(w) * (1.0 if hit else 0.0)
         wda_den += abs(w)
         port_ret += w * r
@@ -114,7 +133,9 @@ def score_day(date: str) -> dict:
         "date": date,
         "n_signals": len(signals),
         "n_positions": len(weights),
-        "abstained": not weights,
+        "abstained": day_status == "abstained",
+        "day_status": day_status,
+        "reports_meta": meta,
         "wda": round(wda_num / wda_den, 4) if wda_den else None,
         "weighted_return": round(port_ret, 5) if weights else 0.0,
         "benchmark": bench,  # 항상매수 동일비중: return / up_ratio(=벤치 WDA)
@@ -129,7 +150,7 @@ def main(start: str, end: str | None = None):
     results = []
     for d8 in days:
         date = f"{d8[:4]}-{d8[4:6]}-{d8[6:]}"
-        if not list(REPORTS_DIR.rglob(f"{date}_09-00-00.json")):
+        if not list(REPORTS_DIR.rglob(f"{date}_*.json")):
             continue  # 재생 안 된 날 스킵
         r = score_day(date)
         results.append(r)
