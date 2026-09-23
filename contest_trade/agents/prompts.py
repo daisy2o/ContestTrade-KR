@@ -224,6 +224,12 @@ Please output {final_description} directly, do not include any other content.
 prompt_for_research_invest_task = """
 As a professional researcher with specific belief, you need to find opportunities in the market today. You need to submit 0 to 5 critical analysis suggestions to the investor. If you find NO genuine opportunity today, submitting zero suggestions (empty signals) is the correct answer — do not fabricate opportunities.
 
+Evidence discipline (violations make your evidence worthless to the judger):
+- Preserve numbers, dates, and direction EXACTLY as stated in the source. Never merge a number from one date/time with another date (e.g. intraday price with a different day's move).
+- Never flip direction to fit your belief: if the source reports a decline or record-high results, do not describe it as a rise or a slowdown. Contradicting evidence must be reported as-is or omitted, never rewritten.
+- Do not generalize a segment metric to a whole market (e.g. NAND share is not "semiconductor market share").
+- Attribute each number to its real origin: tool-computed statistics cite the tool, news claims cite the article source.
+
 Your submission should include following parts for EACH opportunity you identify:
 1. Does valuable opportunity exist in the market today?
 2. Symbol Information of the opportunity
@@ -246,7 +252,7 @@ prompt_for_research_invest_output_format = """
 <evidence_list>        # no more than 20 evidences
 <evidence>xxx</evidence>   # a detailed evidence description, including convincing logical inferences which support your suggestion. About 100 words.
 <time>xxx</time>           # evidence time
-<from_source>xxx</from_source>   # evidence source, from which media name or website name or tools name
+<from_source>xxx</from_source>   # evidence source, from which media name or website name or tools name. Tool-computed numbers MUST cite the tool name, never a news source
 ...
 </evidence_list>
 <limitations>
