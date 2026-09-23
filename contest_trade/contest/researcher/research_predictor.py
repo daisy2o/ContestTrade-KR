@@ -22,8 +22,13 @@ class ResearchPredictor:
         self.prediction_window_days = prediction_window_days
         self.use_lightgbm = False
 
-        self._load_lightgbm_models()
-    
+        # KR 수정: 모델 파일이 없어도 초기화가 죽지 않게 (원본은 FileNotFoundError로
+        # 콘테스트 전체가 기동 불가 — 죽은 코드였던 원인 중 하나)
+        try:
+            self._load_lightgbm_models()
+        except Exception as e:
+            logger.warning(f"LightGBM 모델 미로드 ({e}) — judge 폴백 모드로 동작")
+
     def _load_lightgbm_models(self) -> bool:
         """
         加载LightGBM模型
@@ -32,7 +37,7 @@ class ResearchPredictor:
         model_dir = Path(__file__).parent / "lightgbm_predictor"
         mean_model_path = model_dir / "lgbm_mean_model.joblib"
         std_model_path = model_dir / "lgbm_std_model.joblib"
-        
+
         if mean_model_path.exists() and std_model_path.exists():
             self.model_mean = joblib.load(mean_model_path)
             self.model_std = joblib.load(std_model_path)
@@ -41,13 +46,19 @@ class ResearchPredictor:
             return True
         else:
             raise FileNotFoundError(f"LightGBM模型文件未找到: {model_dir}")
+
+    def predict_signal_scores(self, current_date: str,
+                              agent_signals: Dict[str, List[Optional[SignalData]]],
+                              current_judge_scores: Dict[str, List[float]]) -> Dict[str, float]:
+        """KR 복원: 원본에서 def 줄이 소실돼 본문이 _load_lightgbm_models 안에
+        고아로 남아 있던 메서드 (research_contest.py:311이 호출하는 공개 API)."""
         logger.info(f"开始预测信号得分 - 日期: {current_date}")
-    
+
         agent_rewards = self._extract_historical_rewards(agent_signals)
         predicted_scores = self._calculate_predicted_scores(agent_rewards, current_judge_scores)
 
         self._log_prediction_summary(predicted_scores)
-        
+
         return predicted_scores
     
     def _extract_historical_rewards(self, agent_signals: Dict[str, List[Optional[SignalData]]]) -> Dict[str, List[Optional[float]]]:
@@ -82,16 +93,23 @@ class ResearchPredictor:
                                   current_judge_scores: Dict[str, List[float]] = None) -> Dict[str, float]:
         """计算预测得分 - 使用LightGBM模型"""
         predicted_scores = {}
-        
+
         if not self.use_lightgbm:
-            raise RuntimeError("LightGBM模型未加载，无法进行预测！请先训练或加载LightGBM模型。")
-        
+            # KR 폴백 (잠정, D-결정 대기): 학습된 모델이 없으면 judge 평균(0~100)을
+            # 0~1로 정규화한 값을 û로 사용 — 부호·순위만 소비하는 가중 규칙과 호환.
+            # 리플레이 초기 구간(학습 이력 부족)의 웜업 경로이기도 하다.
+            logger.warning("LightGBM 미학습 — judge 평균 폴백으로 점수 산출 (selection=judge_fallback)")
+            for agent_name in agent_rewards.keys():
+                js = current_judge_scores.get(agent_name, []) if current_judge_scores else []
+                predicted_scores[agent_name] = (sum(js) / len(js) / 100.0) if js else 0.0
+            return predicted_scores
+
         logger.info("使用LightGBM模型进行预测")
         for agent_name, rewards in agent_rewards.items():
             judge_scores = current_judge_scores.get(agent_name, []) if current_judge_scores else []
             predicted_score = self._predict_single_agent_lightgbm(rewards, judge_scores)
             predicted_scores[agent_name] = predicted_score
-        
+
         return predicted_scores
     
     def _create_features_from_history_and_scores(self, historical_rewards: List[Union[float, None]], 

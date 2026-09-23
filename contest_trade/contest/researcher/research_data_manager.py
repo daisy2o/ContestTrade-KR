@@ -38,12 +38,23 @@ class ResearchDataManager:
         logger.info(f"加载历史信号数据 - 当前日期: {current_date}, 历史窗口: {self.history_window_days}天")
         
         # 生成历史日期列表
+        # KR 수정: 달력일이 아닌 '거래일' 기준 창 — 주말·휴일이 창을 갉아먹지 않게
         current_dt = datetime.strptime(current_date, "%Y-%m-%d")
         historical_dates = []
-        
-        for i in range(self.history_window_days, 0, -1):
-            hist_date = current_dt - timedelta(days=i)
-            historical_dates.append(hist_date.strftime("%Y-%m-%d"))
+        try:
+            from config.config import cfg
+            if getattr(cfg, "market_type", "") == "KR-Stock":
+                from utils.kr_data_utils import GLOBAL_KR_CLIENT
+                start8 = (current_dt - timedelta(days=self.history_window_days * 3 + 10)).strftime("%Y%m%d")
+                end8 = (current_dt - timedelta(days=1)).strftime("%Y%m%d")
+                tdays = GLOBAL_KR_CLIENT.get_trade_dates(start8, end8)[-self.history_window_days:]
+                historical_dates = [f"{d[:4]}-{d[4:6]}-{d[6:]}" for d in tdays]
+        except Exception:
+            historical_dates = []
+        if not historical_dates:
+            for i in range(self.history_window_days, 0, -1):
+                hist_date = current_dt - timedelta(days=i)
+                historical_dates.append(hist_date.strftime("%Y-%m-%d"))
         
         logger.info(f"历史日期范围: {historical_dates[0]} ~ {historical_dates[-1]}")
         
@@ -92,7 +103,9 @@ class ResearchDataManager:
         Returns:
             SignalData: 信号数据，如果不存在则返回None
         """
-        signal_file_pattern = f"{date_str}_09:00:00.json"
+        # KR 수정: 저장기는 콜론을 대시로 치환("09-00-00") — 원본 로더는 "09:00:00"을
+        # 찾아 항상 미발견이었다 (죽은 코드 원인). 두 형식 모두 시도.
+        signal_file_pattern = f"{date_str}_09-00-00.json"
         signal_file = self.reports_dir / agent_name / signal_file_pattern
         
         if not signal_file.exists():
@@ -239,7 +252,8 @@ class ResearchDataManager:
         """
         signals = {}
         
-        filename = f"{trigger_time.replace(' ', '_')}.json"
+        # KR 수정: 저장 파일명 규칙(공백→_, 콜론→-)과 일치시킴
+        filename = f"{trigger_time.replace(' ', '_').replace(':', '-')}.json"
         
         # 遍历所有agent目录
         if self.reports_dir.exists():
@@ -257,6 +271,10 @@ class ResearchDataManager:
                         signals[agent_dir.name] = signal_data
         
         return signals
+
+    def load_signals_data(self, date_str: str) -> Dict[str, "SignalData"]:
+        """KR 복원: 판정기가 호출하는 미구현 메서드 — 해당 날짜의 저장 신호를 로드."""
+        return self.load_current_signals(f"{date_str} 09:00:00")
 
     def set_market_manager(self, market_manager):
         """设置市场管理器（用于计算收益率）"""
@@ -285,19 +303,32 @@ class ResearchDataManager:
         signal_time = signal.trigger_time
         signal_dt = datetime.strptime(signal_time, "%Y-%m-%d %H:%M:%S")
         
-        # 计算持有期（假设持有1天）
+        # KR 수정: 시장 하드코딩("CN-Stock") 제거 + 달력일 +1 대신 다음 '거래일' 사용
+        # (원본은 금요일 신호의 청산일이 토요일이 되어 가격 조회 실패 → 죽은 코드 원인)
+        from config.config import cfg
+        market_type = getattr(cfg, "market_type", "CN-Stock")
         entry_date = signal_dt.strftime("%Y-%m-%d %H:%M:%S")
-        exit_date = (signal_dt + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
-        
+        if market_type == "KR-Stock":
+            from utils.kr_data_utils import GLOBAL_KR_CLIENT
+            d8 = signal_dt.strftime("%Y%m%d")
+            lookahead = (signal_dt + timedelta(days=21)).strftime("%Y%m%d")
+            nxt = GLOBAL_KR_CLIENT.get_trade_dates(d8, lookahead)
+            if len(nxt) < 2:
+                raise ValueError(f"{symbol_code}: {entry_date} 의 다음 거래일 미도래 — reward 계산 불가")
+            n = nxt[1]
+            exit_date = f"{n[:4]}-{n[4:6]}-{n[6:]} {signal_dt.strftime('%H:%M:%S')}"
+        else:
+            exit_date = (signal_dt + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+
         # 获取入场价格（开盘价）
-        entry_price_data = self.market_manager.get_symbol_price("CN-Stock", symbol_code, entry_date, 0)
+        entry_price_data = self.market_manager.get_symbol_price(market_type, symbol_code, entry_date, 0)
         if not entry_price_data or 'open' not in entry_price_data:
             raise ValueError(f"无法获取 {symbol_code} 在 {entry_date} 的入场价格")
-        
+
         entry_price = float(entry_price_data['open'])
-        
+
         # 获取出场价格（次日开盘价）
-        exit_price_data = self.market_manager.get_symbol_price("CN-Stock", symbol_code, exit_date, 0)
+        exit_price_data = self.market_manager.get_symbol_price(market_type, symbol_code, exit_date, 0)
         if not exit_price_data or 'open' not in exit_price_data:
             raise ValueError(f"无法获取 {symbol_code} 在 {exit_date} 的出场价格")
         

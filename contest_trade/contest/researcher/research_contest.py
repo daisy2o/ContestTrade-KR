@@ -36,11 +36,16 @@ class ResearchContest:
     def __init__(self, target_agents: List[str] = None):
         self.history_window_days = 5
         self.target_agents = target_agents or []
-        self.data_manager = ResearchDataManager(self.history_window_days, PROJECT_ROOT, target_agents)
+        # KR 수정: PROJECT_ROOT는 contest_trade 디렉토리인데 하위 모듈들은 '저장소
+        # 루트'(그 아래 contest_trade/agents_workspace)를 기대 — 원본은 유령 경로를
+        # 가리켜 이력이 항상 비어 있었다 (죽은 코드 원인 중 하나)
+        repo_root = PROJECT_ROOT.parent
+        workspace = PROJECT_ROOT / "agents_workspace"
+        self.data_manager = ResearchDataManager(self.history_window_days, repo_root, target_agents)
         self.data_manager.set_market_manager(GLOBAL_MARKET_MANAGER)
         self.predictor = ResearchPredictor(self.history_window_days)
-        self.weight_optimizer = ResearchWeightOptimizer(".")
-        self.signal_judger = ResearchSignalJudger(str(PROJECT_ROOT / "contest_trade" / "agents_workspace"), self.history_window_days, self.data_manager)
+        self.weight_optimizer = ResearchWeightOptimizer(str(workspace))
+        self.signal_judger = ResearchSignalJudger(str(workspace), self.history_window_days, self.data_manager)
         
         logger.info(f"ResearchContest初始化完成 - 历史窗口: {self.history_window_days}天, 目标agents: {len(self.target_agents)}个")
     
@@ -316,10 +321,13 @@ class ResearchContest:
         """获取当天信号的judge评分"""
         logger.info(f"获取当天信号judge评分 - {len(current_signals)} 个信号")
         
+        # KR 수정: cfg.llm은 dict (속성 접근은 AttributeError — 죽은 코드 원인 중 하나).
+        # 판정기는 완전한 chat/completions URL을 기대한다.
+        base = (cfg.llm.get("base_url") or "").rstrip("/")
         llm_config = {
-            "api_key": cfg.llm.api_key,
-            "api_base": cfg.llm.api_base,
-            "model_name": cfg.llm.model_name
+            "api_key": cfg.llm.get("api_key", ""),
+            "api_base": f"{base}/chat/completions",
+            "model_name": cfg.llm.get("model_name", "")
         }
         
         judge_scores = await self.signal_judger.judge_signals(

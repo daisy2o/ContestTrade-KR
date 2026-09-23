@@ -270,21 +270,27 @@ Format notes:
                 
                 if history_signals and agent_name in history_signals:
                     signal = history_signals[agent_name]
-                    
+
                     # 检查信号是否有reward数据
                     if hasattr(signal, 'reward') and signal.reward is not None:
                         agent_returns.append(signal.reward)
                     else:
-                        # 如果没有reward数据，尝试实时计算
-                        reward = await self.data_manager.calculate_signal_reward(signal)
-                        agent_returns.append(reward)
-            
+                        # KR 수정: 개별 신호의 reward 계산 실패(기회없음·가격 미도래 등)는
+                        # 건너뛴다 — 원본은 예외로 전체 심사가 중단됐다
+                        try:
+                            reward = await self.data_manager.calculate_signal_reward(signal)
+                            agent_returns.append(reward)
+                        except Exception:
+                            continue
+
             # 计算平均收益率
+            # KR 수정: 이력 없는 에이전트는 None(프롬프트가 "무이력"으로 처리) —
+            # 리플레이 초기 콜드 스타트에서 크래시하지 않도록
             if agent_returns:
                 avg_return = sum(agent_returns) / len(agent_returns)
                 historical_returns[agent_name] = avg_return
             else:
-                raise ValueError(f"研究员 {agent_name} 没有历史数据")
+                historical_returns[agent_name] = None
                 
         logger.info(f"计算历史收益率完成：{len(historical_returns)} 个研究员的历史数据")
         return historical_returns
