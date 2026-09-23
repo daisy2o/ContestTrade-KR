@@ -180,6 +180,12 @@ Requirements:
 6. For each factual description, add corresponding reference tags at the end, such as [1][2]
 7. Output result in language: {language}
 
+Fidelity rules (violations corrupt downstream decisions):
+- Keep every number, date, and direction EXACTLY as the source document states. Never attach a number to a different date or merge an intraday figure with another day's move. An event's date is the date stated in the article body, not the publish date.
+- Never widen a metric's scope (e.g. NAND market share must not become "semiconductor market share"; a combined figure for several executives must not become one company's or one person's figure).
+- Preserve increase/decrease and record-high/record-low exactly; do not soften or reverse them.
+- If unsure of a date or figure, quote the source sentence instead of restating it.
+
 {summary_style}:
 """
 
@@ -218,6 +224,11 @@ Requirements:
 7. Output result in language: {language}
 
 Please output {final_description} directly, do not include any other content.
+Fidelity rules (violations corrupt downstream decisions):
+- Keep every number, date, and direction EXACTLY as the source document states. Never attach a number to a different date or merge an intraday figure with another day's move. An event's date is the date stated in the article body, not the publish date.
+- Never widen a metric's scope (e.g. NAND market share must not become "semiconductor market share"; a combined figure for several executives must not become one company's or one person's figure).
+- Preserve increase/decrease and record-high/record-low exactly; do not soften or reverse them.
+- If unsure of a date or figure, quote the source sentence instead of restating it.
 {final_description}:
 """
 
