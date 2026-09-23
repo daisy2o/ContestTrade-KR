@@ -288,7 +288,19 @@ class DataAnalysisAgent:
         """Merge multiple batch summaries into final document factor"""
         try:
             if not state["batch_results"]:
-                return "No valid document summaries retrieved"
+                # 업스트림 버그 수정: 문자열 반환 시 langgraph InvalidUpdateError로 전체 크래시.
+                # 데이터 0건인 날은 빈 팩터로 상태를 정상 반환한다.
+                state["summary"] = ""
+                state["result"] = DataAnalysisAgentOutput(
+                    agent_name=self.config.agent_name,
+                    trigger_time=state["trigger_time"],
+                    source_list=state["source_list"],
+                    bias_goal=state["bias_goal"],
+                    context_string="",
+                    references=[],
+                    batch_summaries=[]
+                )
+                return state
             
             # Merge all batch summaries
             combined_summary = "\n\n".join([

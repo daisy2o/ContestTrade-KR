@@ -160,12 +160,15 @@ class OpenAIProvider(BaseProvider):
             params["max_tokens"] = max_tokens
         
         # Handle thinking mode for compatible models
+        # (팀 발견 3.1: DeepSeek 전용 extra_body를 OpenAI에 보내면 400 에러 → 분기)
         if 'thinking' in params:
             thinking_flag = params.pop('thinking')
-            if thinking_flag:
-                params['extra_body'] = {"thinking": {"type": "enabled"}}
-            else:
-                params['extra_body'] = {"thinking": {"type": "disabled"}}
+            base_url = str(getattr(self.async_client, 'base_url', '') or '')
+            if 'openai.com' not in base_url:
+                if thinking_flag:
+                    params['extra_body'] = {"thinking": {"type": "enabled"}}
+                else:
+                    params['extra_body'] = {"thinking": {"type": "disabled"}}
         
         return await self.async_client.chat.completions.create(**params)
     
