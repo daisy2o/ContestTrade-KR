@@ -93,6 +93,6 @@ if __name__ == "__main__":
     from utils.kr_universe import load_universe, load_factiva_code_map
 
     src = KrFactivaNews(load_universe(), load_factiva_code_map())
-    df = src.get_data("2026-05-29 09:00:00")
+    df = src.get_data_sync("2026-05-29 09:00:00")
     print(df.head(8).to_string(max_colwidth=60))
     print(f"\n{len(df)}건 / pub_time: {df['pub_time'].min()} ~ {df['pub_time'].max()}" if len(df) else "0건")

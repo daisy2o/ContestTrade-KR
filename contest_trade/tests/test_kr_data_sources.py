@@ -43,13 +43,13 @@ TRIGGER = "2026-09-19 09:00:00"
 
 
 def test_asof_filter_strict(fake_source):
-    df = fake_source.get_data(TRIGGER)
+    df = fake_source.get_data_sync(TRIGGER)
     assert list(df["title"]) == ["past"]  # 동시각·미래 모두 제거
 
 
 def test_cache_after_first_fetch(fake_source):
-    fake_source.get_data(TRIGGER)
-    fake_source.get_data(TRIGGER)
+    fake_source.get_data_sync(TRIGGER)
+    fake_source.get_data_sync(TRIGGER)
     assert fake_source.fetch_count == 1
 
 
@@ -62,7 +62,7 @@ def test_missing_column_raises(tmp_path):
             return pd.DataFrame({"title": ["x"], "pub_time": ["2026-01-01 00:00:00"]})
 
     with pytest.raises(ValueError, match="필수 컬럼"):
-        Broken().get_data(TRIGGER)
+        Broken().get_data_sync(TRIGGER)
 
 
 # ---- D1 DART parsing ----
@@ -134,7 +134,7 @@ def test_dart_all_filtered_day_keeps_column_contract(tmp_path):
                      "report_nm": "풍문또는보도에대한해명", "rcept_no": "9", "flr_nm": "x"}]
             return parse_dart_rows(rows)
 
-    df = NoisyDart().get_data("2026-09-19 09:00:00")
+    df = NoisyDart().get_data_sync("2026-09-19 09:00:00")
     assert len(df) == 0 and list(df.columns) == ["title", "content", "pub_time", "url"]
 
 
@@ -152,5 +152,5 @@ def test_dart_plus_base_asof_integration(tmp_path):
         def fetch_raw(self, trigger_time):
             return parse_dart_rows(DART_ROWS)
 
-    df = FixtureDart().get_data("2026-09-19 09:00:00")
+    df = FixtureDart().get_data_sync("2026-09-19 09:00:00")
     assert len(df) == 2 and all(df["pub_time"] < "2026-09-19 09:00:00")

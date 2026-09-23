@@ -39,27 +39,27 @@ def make(tmp_path):
 
 
 def test_co_code_mapping(fake_db, tmp_path):
-    df = make(tmp_path).get_data("2026-05-29 09:00:00")
+    df = make(tmp_path).get_data_sync("2026-05-29 09:00:00")
     assert any("삼성전자" in t for t in df["title"])
 
 
 def test_name_fallback_without_factiva_code(fake_db, tmp_path):
-    df = make(tmp_path).get_data("2026-05-29 09:00:00")
+    df = make(tmp_path).get_data_sync("2026-05-29 09:00:00")
     assert any("셀트리온" in t for t in df["title"])
 
 
 def test_unmapped_article_excluded(fake_db, tmp_path):
-    df = make(tmp_path).get_data("2026-05-29 09:00:00")
+    df = make(tmp_path).get_data_sync("2026-05-29 09:00:00")
     assert not any("코스피 전망" in t for t in df["title"])
 
 
 def test_d_plus_one_rule(fake_db, tmp_path):
     """5/29 발행 기사는 5/29 09:00 trigger에 절대 안 들어옴 (D+1 = 5/30부터)."""
-    df = make(tmp_path).get_data("2026-05-29 09:00:00")
+    df = make(tmp_path).get_data_sync("2026-05-29 09:00:00")
     assert not any("당일기사" in t for t in df["title"])
     assert all(df["pub_time"] <= "2026-05-29 00:00:00")
 
 
 def test_body_truncated_to_300(fake_db, tmp_path):
-    df = make(tmp_path).get_data("2026-05-29 09:00:00")
+    df = make(tmp_path).get_data_sync("2026-05-29 09:00:00")
     assert all(len(c) <= 300 for c in df["content"])

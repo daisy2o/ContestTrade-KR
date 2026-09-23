@@ -120,6 +120,6 @@ if __name__ == "__main__":
         "090430": "아모레퍼시픽", "051900": "LG생활건강",
     }
     src = KrTelegramResearch(universe)
-    df = src.get_data("2025-09-15 09:00:00")
+    df = src.get_data_sync("2025-09-15 09:00:00")
     print(df.head(10))
     print(f"{len(df)}건")

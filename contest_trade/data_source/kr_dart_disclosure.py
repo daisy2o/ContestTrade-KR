@@ -170,6 +170,6 @@ class KrDartDisclosure(KRDataSourceBase):
 if __name__ == "__main__":
     # 라이브 스모크 테스트 (DART 키 필요)
     src = KrDartDisclosure()
-    df = src.get_data("2026-09-19 09:00:00")
+    df = src.get_data_sync("2026-09-19 09:00:00")
     print(df.head(10))
     print(f"{len(df)}건 / pub_time 범위: {df['pub_time'].min()} ~ {df['pub_time'].max()}")

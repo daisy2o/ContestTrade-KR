@@ -34,7 +34,12 @@ class KRDataSourceBase(DataSourceBase):
         불필요한 과대 조회를 피하기 위해 소스 측 기간 제한을 함께 걸 것."""
         raise NotImplementedError
 
-    def get_data(self, trigger_time: str) -> pd.DataFrame:
+    async def get_data(self, trigger_time: str) -> pd.DataFrame:
+        """업스트림 계약: data_analysis_agent가 `await source.get_data(...)`로 호출.
+        동기 구현이면 DataFrame이 그대로 반환돼 await에서 TypeError — async 필수."""
+        return self.get_data_sync(trigger_time)
+
+    def get_data_sync(self, trigger_time: str) -> pd.DataFrame:
         cached = self.get_data_cached(trigger_time)
         if cached is not None:
             return cached
