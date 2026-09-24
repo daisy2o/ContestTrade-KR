@@ -4,10 +4,14 @@
 현행 구조는 모델에게 "약 100단어로 근거를 서술"하게 해서, 재서술 과정 자체가
 수치·날짜·한정어 왜곡의 경로가 된다. 이 모듈은 고정 입력을 **문장/필드 단위로
 분해해 식별자를 붙이고**, 모델은 식별자만 고르게 한다. 인용문·출처·시각은
-프로그램이 원문에서 채운다.
+프로그램이 입력에서 채운다.
+
+용어 주의: S 단위는 **팩터 요약의 문장**이지 기사·텔레그램 원문이 아니다.
+"인용이 정확하다"는 것은 그 요약 문장과 일치한다는 뜻이며, 요약 자체의 정확성과
+기사 원문까지의 연결은 별도로 남는 문제다.
 
 두 종류의 근거 단위:
-- `S{n}` : 팩터 요약의 한 문장 (출처 소스명·원문 문장·해당 문장이 인용한 doc id)
+- `S{n}` : 팩터 요약의 한 문장 (소스명·요약 문장·그 문장이 인용한 doc id)
 - `T{n}` : 도구 호출 결과의 한 필드 (도구명·종목·필드명·값 문자열 그대로)
 
 주의: 인용이 정확해도 해석은 틀릴 수 있다(합산 수치를 정확히 인용한 뒤 한 회사
@@ -29,7 +33,7 @@ class EvidenceUnit:
     uid: str
     kind: str          # "summary" | "tool"
     source: str        # 소스명 또는 도구명
-    text: str          # 원문 그대로 (모델이 다시 쓰지 못하게 프로그램이 보관)
+    text: str          # 입력 문장/필드 그대로 (모델이 다시 쓰지 못하게 프로그램이 보관)
     meta: Dict = field(default_factory=dict)
 
     def to_line(self) -> str:
@@ -121,7 +125,9 @@ def render_bank(bank: Dict[str, EvidenceUnit], max_chars: int = 24000) -> str:
 
 
 def resolve(bank: Dict[str, EvidenceUnit], uid: str) -> dict:
-    """모델이 고른 uid를 원문·메타데이터로 확장 (프로그램이 채움)."""
+    """모델이 고른 uid를 입력 문장·메타데이터로 확장 (프로그램이 채움).
+
+    kind="summary"면 quote는 팩터 요약 문장이며 기사 원문이 아니다."""
     u = bank.get(uid)
     if u is None:
         return {"uid": uid, "valid": False, "error": "존재하지 않는 근거 ID"}
