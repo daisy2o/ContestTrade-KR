@@ -177,7 +177,7 @@ Requirements:
 3. While maintaining accuracy, prioritize content related to the goal
 4. Organize content by information importance and timeliness
 5. Control within {summary_target_tokens} words
-6. For each factual description, add corresponding reference tags at the end, such as [1][2]
+6. For each factual description, cite the source document by its EXACT id from <doc id=N>, e.g. [12][37] — never renumber them sequentially
 7. Output result in language: {language}
 
 Fidelity rules (violations corrupt downstream decisions):
@@ -186,6 +186,8 @@ Fidelity rules (violations corrupt downstream decisions):
 - Never widen a metric's scope (e.g. NAND market share must not become "semiconductor market share"; a combined figure for several executives must not become one company's or one person's figure).
 - Preserve increase/decrease and record-high/record-low exactly; do not soften or reverse them.
 - If unsure of a date or figure, quote the source sentence instead of restating it.
+- Carry every qualifier with the fact it belongs to: "장중" (intraday), "차량용/낸드/HBM" (segment), "지난해/1분기" (period), "전망/예정" (forecast vs confirmed), "합산" (combined). A fact stripped of its qualifier is a false fact.
+- The "Available From" field is a usability timestamp under a D+1 rule, never an event date. Write the date the article itself states.
 
 {summary_style}:
 """
@@ -231,6 +233,8 @@ Fidelity rules (violations corrupt downstream decisions):
 - Never widen a metric's scope (e.g. NAND market share must not become "semiconductor market share"; a combined figure for several executives must not become one company's or one person's figure).
 - Preserve increase/decrease and record-high/record-low exactly; do not soften or reverse them.
 - If unsure of a date or figure, quote the source sentence instead of restating it.
+- Carry every qualifier with the fact it belongs to: "장중" (intraday), "차량용/낸드/HBM" (segment), "지난해/1분기" (period), "전망/예정" (forecast vs confirmed), "합산" (combined). A fact stripped of its qualifier is a false fact.
+- The "Available From" field is a usability timestamp under a D+1 rule, never an event date. Write the date the article itself states.
 {final_description}:
 """
 
@@ -244,6 +248,8 @@ Evidence discipline (violations make your evidence worthless to the judger):
 - Attribute each number to its real origin: tool-computed statistics cite the tool, news claims cite the article source.
 - Copy each tool statistic verbatim for EXACTLY the symbol and the window the tool reported — never transfer a value to another stock or restate it over a different period.
 - Never state claims absent from your sources or tool outputs: no invented streaks ("N일 연속"), no comparisons to unmeasured baselines ("시장 평균보다"), no implication reversals (a ratio below 1 is BELOW average).
+- Carry qualifiers from the factor summary into your evidence verbatim: intraday ("장중") stays intraday, a segment ("차량용 메모리", "낸드", "HBM") never becomes the whole market, a period ("지난해", "1분기") never shifts, a forecast never becomes a confirmed result, a combined figure never becomes one company's. Dropping a qualifier makes the evidence false.
+- Quote tool values exactly as the tool printed them, units included (e.g. "+180.59%"); never convert, recompute over a different window, or reinterpret a percentage as a ratio.
 
 Your submission should include following parts for EACH opportunity you identify:
 1. Does valuable opportunity exist in the market today?

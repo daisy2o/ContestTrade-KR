@@ -468,7 +468,7 @@ class DataAnalysisAgent:
             doc_id = row.get('id', idx)
             title = row.get('title', '')
             pub_time = row.get('pub_time', '')
-            titles_context += f"ID: {doc_id}\nTitle: {title}\nPublish Time: {pub_time}\n\n"
+            titles_context += f"ID: {doc_id}\nTitle: {title}\nAvailable From: {pub_time}\n\n"
         
         prompt = prompt_for_data_analysis_filter_doc.format(
             trigger_datetime=trigger_datetime,
@@ -522,10 +522,14 @@ class DataAnalysisAgent:
             
             if pub_time.endswith("23:59:59"):
                 pub_time = pub_time.split(" ")[0]
-            doc_context += f"<doc id={doc_id}> Title: {title}\nPublish Time: {pub_time}\nContent: {content}</doc>\n"
+            doc_context += (f"<doc id={doc_id}> Title: {title}\n"
+                            f"Available From: {pub_time}  (NOT the event date — see [보도일] tag or the body text)\n"
+                            f"Content: {content}</doc>\n")
             # KR 수정: 원문 통과 경로에서도 [id]를 보존해 인용·references 추출이
             # 가능하게 한다 (문서가 적은 소스 — 특히 DART — 가 인용 불가가 되던 문제)
-            doc_raw_content += f"[{doc_id}] Title: {title}\nPublish Time: {pub_time}\nContent: {content}\n"
+            doc_raw_content += (f"[{doc_id}] Title: {title}\n"
+                                f"Available From: {pub_time}  (NOT the event date)\n"
+                                f"Content: {content}\n")
         
         if len(doc_context) <= self.config.summary_target_tokens and not bias_goal:
             return doc_raw_content

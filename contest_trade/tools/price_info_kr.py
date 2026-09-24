@@ -30,9 +30,20 @@ async def price_info(market: str, symbol: str, trigger_time: str = None) -> dict
         return {"error": f"No price data for {symbol} in [{start}, {end}]"}
     out = df.tail(20).copy()
     out.index = out.index.strftime("%Y-%m-%d")
+    # 파생 수익률을 미리 계산해 제공한다: 에이전트가 원시 OHLCV로 직접 산수하다
+    # 창을 바꿔버리는 사고(1일치를 5일로, 83일치를 20일로)가 실측으로 확인됨.
+    close = df["Close"]
+    pct = lambda n: (f"{float(close.iloc[-1] / close.iloc[-1 - n] - 1) * 100:+.2f}%"
+                     if len(close) > n else None)
+    last_bar = df.index[-1].strftime("%Y-%m-%d")
     return {
         "symbol": symbol,
-        "as_of": end,
-        "last_close": float(df["Close"].iloc[-1]),
-        "recent_daily": out[["Open", "High", "Low", "Close", "Volume"]].to_dict(orient="index"),
+        "as_of_last_bar": last_bar,
+        "last_close_krw": float(close.iloc[-1]),
+        "derived_returns": {  # 이 값을 그대로 인용할 것 — 직접 재계산 금지
+            "return_1_trading_day": pct(1),
+            "return_5_trading_days": pct(5),
+            "return_20_trading_days": pct(20),
+        },
+        "recent_daily_ohlcv": out[["Open", "High", "Low", "Close", "Volume"]].to_dict(orient="index"),
     }
