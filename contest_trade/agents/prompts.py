@@ -256,6 +256,12 @@ Your submission should include following parts for EACH opportunity you identify
 2. Symbol Information of the opportunity
 3. Evidence list you find to prove the opportunity is valuable. Judger will use these evidences to judge the opportunity is valuable or not.
 4. Based on the evidence_list, you need to give a probability to this opportunity.
+   You must give TWO separate numbers and they are NOT derivable from each other:
+   - <probability>: chance that YOUR CHOSEN DIRECTION is correct.
+   - <p_up>: chance that the price RISES, i.e. P(next trading day's open > today's open),
+     regardless of which direction you chose. For a sell signal this is normally below 50.
+   Do not compute one from the other. A flat price counts as a miss for <probability>,
+   so 1 - probability is NOT the probability of rising.
 5. You need to give a limitation to your suggestion, such as risk, etc. No limitation will be rejected.
 6. You should provide between 1 to 5 opportunity suggestions based on what you find in the market. Only submit signals for opportunities you genuinely identify.
 7. If accepted, your suggestions will execute when the market opens and hold for one day. So you need to focus on short-term information.
@@ -281,6 +287,7 @@ prompt_for_research_invest_output_format = """
 ...
 </limitations>
 <probability>xxx</probability>  # 0-100: 평가 구간(당일 시가 → 다음 거래일 종가)에서 '선택한 방향'이 맞을 확률. 가격 불변이면 무적중
+<p_up>xxx</p_up>  # 0-100: **상승 확률** P(다음 거래일 시가 > 당일 시가). 위 probability와 다른 값이다 — probability는 '선택한 방향'의 적중 확률이라 sell에서는 1-p_up이 아니다(보합을 양쪽 무적중으로 두면 변환이 성립하지 않는다). 방향과 무관하게 **상승 확률 하나**로 답할 것
 </signal>
 <!-- Repeat <signal>...</signal> block for each opportunity you identify, 0 to 5 signals -->
 <!-- Submitting ZERO signals is a valid answer when no genuine opportunity exists: output <signals></signals> -->

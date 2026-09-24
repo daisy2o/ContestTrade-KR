@@ -45,11 +45,19 @@ class ResearchDataManager:
             from config.config import cfg
             if getattr(cfg, "market_type", "") == "KR-Stock":
                 from utils.kr_data_utils import GLOBAL_KR_CLIENT
-                start8 = (current_dt - timedelta(days=self.history_window_days * 3 + 10)).strftime("%Y%m%d")
-                end8 = (current_dt - timedelta(days=1)).strftime("%Y%m%d")
-                tdays = GLOBAL_KR_CLIENT.get_trade_dates(start8, end8)[-self.history_window_days:]
-                historical_dates = [f"{d[:4]}-{d[4:6]}-{d[6:]}" for d in tdays]
-        except Exception:
+                # 누수 차단: 이력 창을 "D-1까지"로 잡으면 D-1 신호의 보상이
+                # **판단일 당일 시가**를 필요로 한다(보상 = 신호일 시가 → 다음 거래일
+                # 시가). 판단 시각 08:30은 개장 전이라 그 값이 아직 없다.
+                # 날짜 간격이 아니라 **보상 확정 시각**으로 거른다.
+                from contest.researcher.reward_availability import eligible_history_dates
+                historical_dates = eligible_history_dates(
+                    current_date, self.history_window_days, GLOBAL_KR_CLIENT)
+                if not historical_dates:
+                    logger.warning(
+                        f"{current_date}: 보상이 확정된 이력 없음 — 콘테스트 가중치를 "
+                        f"만들 수 없다. 호출부는 **동일가중 초기값**을 쓸 것.")
+        except Exception as e:
+            logger.warning(f"이력 날짜 산출 실패({e}) — 달력일 폴백 사용")
             historical_dates = []
         if not historical_dates:
             for i in range(self.history_window_days, 0, -1):
