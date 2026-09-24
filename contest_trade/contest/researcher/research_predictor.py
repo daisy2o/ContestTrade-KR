@@ -77,7 +77,10 @@ class ResearchPredictor:
                 elif signal.has_contest_data() and 'reward' in signal.contest_data:
                         # 提取该信号的收益率，这应该是该agent当天的收益率
                     reward = signal.contest_data["reward"]
-                    if abs(reward) > 0.40:
+                    if reward is None:
+                        # 정상 기권 등으로 보상이 정의되지 않은 경우 — 실패가 아니다
+                        rewards_list.append(None)
+                    elif abs(reward) > 0.40:
                         logger.debug(f"过滤 {agent_name} 的异常收益率: {reward:.2%} (疑似涨跌停)")
                         rewards_list.append(0)
                     else:
@@ -303,7 +306,10 @@ class ResearchPredictor:
                     if 'reward' in contest_data:
                         reward = contest_data['reward']
                         # 涨跌停过滤：排除超过±40%的收益率
-                        if abs(reward) > 0.40:
+                        if reward is None:
+                            # 정상 기권 등으로 보상이 정의되지 않은 경우 — 실패가 아니다
+                            rewards.append(None)
+                        elif abs(reward) > 0.40:
                             logger.debug(f"训练数据过滤 {agent_name} 的异常收益率: {reward:.2%} (疑似涨跌停)")
                             rewards.append(None)
                         else:

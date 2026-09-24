@@ -105,8 +105,13 @@ def summarize(pairs: list) -> dict:
 
 
 def decide_method(diag: dict) -> tuple:
-    """학습 가능 여부 판정. 부족하면 부족하다고 말한다."""
-    n = diag.get("유효_학습표본수(보상 확정)", 0)
+    """학습 가능 여부 판정. 부족하면 부족하다고 말한다.
+
+    **중복 누적된 후보 수가 아니라 실제 구성 가능한 학습 표본 수로 판단한다.**
+    """
+    n = diag.get("실제_구성가능_학습표본")
+    if n is None:
+        n = diag.get("유효_학습표본수(보상 확정)", 0)
     if n < MIN_TRAIN_SAMPLES:
         return METHOD_INSUFFICIENT, (
             f"유효 학습 표본 {n}건 < 최소 {MIN_TRAIN_SAMPLES}건. "

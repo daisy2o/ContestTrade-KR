@@ -7,6 +7,7 @@ ResearchContest - 统一的研究信号竞争系统
 3. Selection: 选择优质信号为投资提供权重分配
 """
 
+import json
 import os
 import sys
 import logging
@@ -203,6 +204,31 @@ class ResearchContest:
                         "진단": {"수집된_신호수(파일 기준)": 0,
                                  "유효_학습표본수(보상 확정)": 0}}
 
+            # 소급 생성한 judge 점수를 학습 경로(contest_data['judge_scores'])에 주입한다.
+            # 학습기는 SignalData에서 읽으므로, 별도 파일에만 저장하면 연결되지 않는다.
+            # ⚠️ 각 신호는 **그 신호 당시의 판단 시각**으로 생성된 점수를 받는다
+            #    (학습일 기준이 아니다).
+            from evaluation.backfill_judge_scores import STORE as _BF
+            n_injected, n_missing = 0, 0
+            for agent_name, signals in training_data.items():
+                for sig in signals:
+                    d = sig.trigger_time.split(" ")[0]
+                    f = _BF / f"backfill_{d}.json"
+                    if not f.exists():
+                        n_missing += 1
+                        continue
+                    raw = json.loads(f.read_text()).get("scores", {}).get(agent_name)
+                    if not raw:
+                        n_missing += 1
+                        continue
+                    vals = [x.get("score") if isinstance(x, dict) else x for x in raw]
+                    cd = dict(getattr(sig, "contest_data", None) or {})
+                    cd["judge_scores"] = vals
+                    cd["judge_source"] = "소급 재구성 (당시 판단 시각 기준)"
+                    sig.contest_data = cd
+                    n_injected += 1
+            print(f"   judge 특징 주입: {n_injected}건 (미보유 {n_missing}건)")
+
             # 유효 (특징, 보상) 쌍을 센다 — 파일 수가 아니다
             pairs = []
             for agent_name, signals in training_data.items():
@@ -217,6 +243,32 @@ class ResearchContest:
                             r = None
                     pairs.append((sig, r))
             diag = TA.summarize(pairs)
+
+            # ⚠️ 위 수는 **중복 누적된 후보 표본**이다.
+            # _collect_historical_training_data가 날짜마다 '창'을 통째로 모으므로
+            # 같은 (날짜, 에이전트)가 여러 번 들어간다. 실제로 만들 수 있는 학습
+            # 표본은 **고유 (날짜, 에이전트) 쌍에서 연속 8개(이력 5 + 예측 3) 창**의
+            # 수다. 이것을 따로 세지 않으면 학습 가능성을 과대평가한다.
+            uniq = {}
+            for sig, r in pairs:
+                d = sig.trigger_time.split(" ")[0]
+                has_j = bool((getattr(sig, "contest_data", None) or {}).get("judge_scores"))
+                uniq[(d, sig.agent_name)] = (r is not None) and has_j
+            by_agent = {}
+            for (d, a), ok in uniq.items():
+                by_agent.setdefault(a, []).append((d, ok))
+            H, P = self.predictor.history_window_days, self.predictor.prediction_window_days
+            buildable = 0
+            for a, rows in by_agent.items():
+                usable = sorted(d for d, ok in rows if ok)
+                buildable += max(0, len(usable) - (H + P) + 1)
+            diag["고유_(날짜,에이전트)_쌍"] = len(uniq)
+            diag["judge·보상_모두_확보"] = sum(1 for v in uniq.values() if v)
+            diag["실제_구성가능_학습표본"] = buildable
+            diag["창_요건"] = f"연속 {H + P}개 (이력 {H} + 예측 {P})"
+            diag["주의"] = ("'유효_학습표본수(보상 확정)'는 창 누적으로 중복된 수다. "
+                            "학습 가능성은 '실제_구성가능_학습표본'으로 판단한다.")
+
             method, why = TA.decide_method(diag)
             if method != TA.METHOD_LIGHTGBM:
                 # 부족한 자료를 억지로 학습시켜 '완료'로 처리하지 않는다
@@ -335,13 +387,36 @@ class ResearchContest:
         
         logger.info(f"需要评估 {len(signals_to_evaluate)} 个信号")
         
+        n_abstain = 0
         for signal, signal_date in signals_to_evaluate:
-            reward = await self.data_manager.calculate_signal_reward(signal)
+            # 정상 기권(has_opportunity=no 또는 빈 제출)은 **실패가 아니다**.
+            # 보상이 정의되지 않을 뿐이므로 reward=None 으로 두고 넘어간다.
+            # (예외를 던지면 과거에 기권이 하나라도 있는 날은 콘테스트가 통째로
+            #  죽는다 — 실측으로 06-19·06-24가 그렇게 중단됐다.)
+            ho = (getattr(signal, "has_opportunity", "") or "").strip().lower()
+            if ho != "yes":
+                signal.contest_data = {
+                    'reward': None,
+                    'evaluation_date': signal_date,
+                    'evaluation_method': 'abstained_no_reward',
+                    'note': '정상 기권 — 보상 미정의(실행 실패 아님)'
+                }
+                n_abstain += 1
+                continue
+            try:
+                reward = await self.data_manager.calculate_signal_reward(signal)
+                method = 'market_return'
+            except Exception as e:  # noqa: BLE001
+                # 가격 결측·거래정지 등은 그 신호를 이력에서 빼되 실행은 계속한다
+                logger.warning(f"보상 계산 실패({signal.agent_name} {signal_date}): {e}")
+                reward, method = None, 'reward_unavailable'
             signal.contest_data = {
                 'reward': reward,
                 'evaluation_date': signal_date,
-                'evaluation_method': 'market_return'
+                'evaluation_method': method
             }
+        if n_abstain:
+            logger.info(f"정상 기권 {n_abstain}건 — 보상 미정의로 처리(실패 아님)")
         
         logger.info(f"评估完成: {len(signals_to_evaluate)} 个信号全部成功")
 
