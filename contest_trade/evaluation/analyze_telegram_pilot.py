@@ -135,12 +135,13 @@ def main():
                                 miss += 1
             stat[name] = {"근거수": nev,
                           "활용_출력_건수": tel_only,
-                          "고유_정보_수_자동상한": len(src_msgs),
+                          "고유_메시지_후보수": len(src_msgs),
                           "원문_메시지_후보": sorted(f"{c}#{m}" for c, m in src_msgs),
-                          "주의": "고유_정보_수_자동상한은 **상한**이다. 검색어가 느슨해 "
-                                  "엉뚱한 메시지가 섞인다(실측: 05-07 자동 12 vs 수동 확인 4 — "
-                                  "호텔 ADR·프로브카드 DRAM 등이 섞였다). 보고할 숫자는 "
-                                  "원문을 읽어 확인한 수다.",
+                          "주의": "이 수는 **후보 메시지 수**이지 상한이 아니다. 검색어가 "
+                                  "느슨해 엉뚱한 메시지가 섞이기도 하고(05-07: 자동 12 중 "
+                                  "원문 확인 4 — 호텔 ADR·프로브카드 DRAM 혼입), 반대로 "
+                                  "문자열이 달라 **놓친 메시지**도 있을 수 있다. 어느 방향으로도 "
+                                  "보장되지 않는다. 보고할 숫자는 원문을 읽어 확인한 수다.",
                           "텔레그램에만_있는_요소_사용": tel_only,
                           "다른소스에도_있음": shared, "어느쪽에도_없음": miss,
                           "기권_실행수": abst}
@@ -167,6 +168,25 @@ def main():
         rng.shuffle(common)
         review += common[:6]
 
+        # 미탐지 출력 무작위 검토 — 자동 탐지 후보만 보면 정성 정보의 활용을 놓친다.
+        # 탐지기가 잡지 못한 포함-조건 근거에서 날짜별로 일부를 무작위로 뽑는다.
+        undet = []
+        for agent, reps in arms["텔레그램_포함"].items():
+            tel, other = blocks(date, agent)
+            tk, ok2 = keys_of(tel), keys_of(other)
+            for r in reps:
+                for sg in r["signals"]:
+                    for ev in re.findall(r"<evidence>(.*?)</evidence>", sg["evidence"], re.S) \
+                            or [sg["evidence"]]:
+                        if not (keys_of(ev) & tk - ok2):
+                            undet.append({"우선순위": "4_미탐지_무작위검토", "date": date,
+                                          "agent": agent, "rep": r["rep"],
+                                          "symbol": sg["symbol"], "근거": ev[:300],
+                                          "확인할_것": "탐지기가 놓친 텔레그램 정성 정보의 "
+                                                      "활용이 있는가(수치 없는 서술형 포함)."})
+        rng.shuffle(undet)
+        review += undet[:4]
+
         per_date[date] = {"선택빈도": sel, "근거귀속·기권": stat}
 
     res = {"설계": {
@@ -189,7 +209,7 @@ def main():
         print("  ②③ 근거 귀속·기권:")
         for name, s in v["근거귀속·기권"].items():
             print(f"       {name}: 근거 {s['근거수']:>3} | 활용건수 {s['활용_출력_건수']:>2}"
-                  f" | 고유정보(자동상한) {s['고유_정보_수_자동상한']:>2}"
+                  f" | 고유메시지후보 {s['고유_메시지_후보수']:>2}"
                   f" | 공유 {s['다른소스에도_있음']:>3} | 미발견 {s['어느쪽에도_없음']:>2}"
                   f" | 기권실행 {s['기권_실행수']}")
     print(f"\n검토 대기열 {len(review)}건 → {OUT / 'telegram_pilot_analysis.json'}")
