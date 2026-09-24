@@ -366,7 +366,7 @@ class DataAnalysisAgent:
                             all_ref_ids.add(str(ref["id"]))
             
             # Add final summary references
-            final_ref_ids = re.findall(r'\[(\d+)\]', final_summary)
+            final_ref_ids = re.findall(r'\[(?:doc\s*id\s*=\s*)?(\d+)\]', final_summary)
             all_ref_ids.update(final_ref_ids)
             
             # Get all unique references - convert IDs to integers for DataFrame filtering
@@ -438,7 +438,7 @@ class DataAnalysisAgent:
             batch_result["success"] = True
             
             # Collect references from batch summary
-            summary_ref_ids = [int(i) for i in re.findall(r'\[(\d+)\]', summary)]
+            summary_ref_ids = [int(i) for i in re.findall(r'\[(?:doc\s*id\s*=\s*)?(\d+)\]', summary)]
             batch_result["references"] = filtered_df[filtered_df["id"].isin(summary_ref_ids)].to_dict(orient="records")
             
             print(f"Completed processing batch {batch_idx}")
