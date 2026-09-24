@@ -34,6 +34,7 @@ sys.path.insert(0, str(ROOT))
 
 from evaluation.judge_model_bench import (NUM, expand_units, norm,  # noqa: E402
                                           significant)
+from evaluation.link_to_source_msg import raw_messages  # noqa: E402
 from evaluation.telegram_ablation import BLOCK_RE  # noqa: E402
 
 OUT = ROOT / "evaluation" / "out"
@@ -54,6 +55,15 @@ def blocks(date: str, agent: str):
     other = (b.get("kr_dart_disclosure", "") + b.get("kr_factiva_news", "")
              + d.get("tool_call_context", ""))
     return tel, other
+
+
+def _needle(elem: str) -> str:
+    """정규화된 대조 요소를 원문 검색어로 되돌린다. 지수 표기는 원문에 없다."""
+    try:
+        f = float(elem)
+        return f"{int(f):,}" if f == int(f) and abs(f) < 1e7 else elem
+    except ValueError:
+        return elem
 
 
 def keys_of(text: str) -> set:
@@ -87,9 +97,11 @@ def main():
                 "차이": freq["포함"][k] - freq["제외"][k]} for k in allk]
 
         # ②③ 근거별 귀속 + 기권
+        msgs = raw_messages(date)
         stat = {}
         for name, arm in (("포함", arms["텔레그램_포함"]), ("제외", arms["텔레그램_제외"])):
             tel_only = shared = miss = nev = 0
+            src_msgs = set()
             abst = sum(1 for reps in arm.values() for r in reps if not r["signals"])
             for agent, reps in arm.items():
                 tel, other = blocks(date, agent)
@@ -103,6 +115,11 @@ def main():
                             t_only = k & tk - ok
                             if t_only:
                                 tel_only += 1
+                                # 고유 정보 수 = 서로 다른 원문 메시지 수.
+                                # 활용 출력 건수와 **섞어 보고하지 않는다**.
+                                for mm in msgs:
+                                    if any(_needle(e) in mm["text"] for e in t_only):
+                                        src_msgs.add((mm["channel"], mm["message_id"]))
                                 if name == "포함":
                                     review.append({
                                         "우선순위": "1_텔레그램고유_사용후보", "date": date,
@@ -116,7 +133,15 @@ def main():
                                 shared += 1
                             else:
                                 miss += 1
-            stat[name] = {"근거수": nev, "텔레그램에만_있는_요소_사용": tel_only,
+            stat[name] = {"근거수": nev,
+                          "활용_출력_건수": tel_only,
+                          "고유_정보_수_자동상한": len(src_msgs),
+                          "원문_메시지_후보": sorted(f"{c}#{m}" for c, m in src_msgs),
+                          "주의": "고유_정보_수_자동상한은 **상한**이다. 검색어가 느슨해 "
+                                  "엉뚱한 메시지가 섞인다(실측: 05-07 자동 12 vs 수동 확인 4 — "
+                                  "호텔 ADR·프로브카드 DRAM 등이 섞였다). 보고할 숫자는 "
+                                  "원문을 읽어 확인한 수다.",
+                          "텔레그램에만_있는_요소_사용": tel_only,
                           "다른소스에도_있음": shared, "어느쪽에도_없음": miss,
                           "기권_실행수": abst}
 
@@ -163,7 +188,8 @@ def main():
             print(f"       {x['symbol']} {x['action']:<5} {x['포함']:>2} / {x['제외']:>2}{mark}")
         print("  ②③ 근거 귀속·기권:")
         for name, s in v["근거귀속·기권"].items():
-            print(f"       {name}: 근거 {s['근거수']:>3} | 텔레그램고유 {s['텔레그램에만_있는_요소_사용']:>2}"
+            print(f"       {name}: 근거 {s['근거수']:>3} | 활용건수 {s['활용_출력_건수']:>2}"
+                  f" | 고유정보(자동상한) {s['고유_정보_수_자동상한']:>2}"
                   f" | 공유 {s['다른소스에도_있음']:>3} | 미발견 {s['어느쪽에도_없음']:>2}"
                   f" | 기권실행 {s['기권_실행수']}")
     print(f"\n검토 대기열 {len(review)}건 → {OUT / 'telegram_pilot_analysis.json'}")
