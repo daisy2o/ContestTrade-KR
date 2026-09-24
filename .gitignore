@@ -254,3 +254,4 @@ data_collection/openrouter_secrets.yaml
 # 도구(코드)는 공유하고, 그 도구가 만든 결과는 공유하지 않는다.
 contest_trade/evaluation/blind/
 contest_trade/evaluation/PILOT_P1_요약.md
+contest_trade/evaluation/out/텔레그램_전달경로_점검.md
