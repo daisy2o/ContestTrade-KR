@@ -30,6 +30,7 @@
 import argparse
 import asyncio
 import json
+import random
 import re
 import sys
 from collections import Counter
@@ -79,9 +80,10 @@ def parse_signals(raw: str) -> list:
     return out
 
 
-async def run_arm(items: dict, model: str, reps: int, tools: str, strip: bool):
-    """한쪽 조건 실행. strip=True면 텔레그램 블록을 제거한 입력으로 돌린다."""
-    arm, manip = {}, {}
+def prepare(items: dict, tools: str, strip: bool):
+    """조건별 프롬프트를 미리 만든다. 조작 실패는 여기서 즉시 중단한다 —
+    조작이 안 된 채 비교하면 '차이 없음'을 잘못 결론낸다."""
+    prompts, manip = {}, {}
     for agent, d in items.items():
         d = dict(d)
         if strip:
@@ -90,16 +92,11 @@ async def run_arm(items: dict, model: str, reps: int, tools: str, strip: bool):
                             "제거_전_길이": len(d.get("background_information", "")),
                             "제거_후_길이": len(bg2)}
             if not removed:
-                # 조작이 실패했는데 결과를 비교하면 "차이 없음"을 잘못 결론낸다
                 raise SystemExit(f"[중단] {agent}: 텔레그램 블록을 찾지 못했다. "
                                  f"입력 형식이 바뀌었는지 확인할 것.")
             d["background_information"] = bg2
-        prompt = build_prompt_A(d, tools)
-        arm[agent] = []
-        for r in range(reps):
-            raw = await call(model, prompt)
-            arm[agent].append({"rep": r + 1, "raw": raw, "signals": parse_signals(raw)})
-    return arm, manip
+        prompts[agent] = build_prompt_A(d, tools)
+    return prompts, manip
 
 
 def flatten(arm: dict) -> Counter:
@@ -129,9 +126,10 @@ def compare(on: dict, off: dict) -> dict:
         "양쪽_공통": [{"symbol": k[0], "action": k[1],
                       "포함": con[k], "제외": coff[k]} for k in both],
         "방향이_뒤집힌_종목": sorted({k[0] for k in only_on} & {k[0] for k in only_off}),
-        "주의": "반복 2회·1일 관찰이다. 차이가 있어도 실행 간 변동과 구분되지 않는다. "
-                "사람 검토 전까지는 '추천이 달라졌다'까지만 말할 수 있고 "
-                "'텔레그램이 더 나은 근거를 줬다'고 말할 수 없다.",
+        "주의": "같은 입력을 여러 번 돌린 것이지 서로 다른 거래일이 아니다. "
+                "이 결과로 **기간 전체의 효과를 주장하지 않는다** — 다음 평가를 할 "
+                "가치가 있는지만 판단한다. 검토 전까지는 '추천이 달라졌다'까지만 "
+                "말할 수 있고 '텔레그램이 더 나은 근거를 줬다'고 말할 수 없다.",
     }
 
 
@@ -162,21 +160,41 @@ def review_queue(on: dict, off: dict, cmp_: dict) -> list:
     return out
 
 
-async def main(date: str, model: str, reps: int):
+async def main(date: str, model: str, reps: int, seed: int = 20260924):
     items = load_inputs(date)
     if not items:
         sys.exit(f"[중단] {date} 리포트 없음")
     tools = _tools_info()
-    print(f"{date}: 에이전트 {len(items)} × 반복 {reps} × 2조건 = {len(items)*reps*2} 호출")
+    p_on, _ = prepare(items, tools, strip=False)
+    p_off, manip = prepare(items, tools, strip=True)
+    total = len(items) * reps * 2
+    print(f"{date}: 에이전트 {len(items)} × 반복 {reps} × 2조건 = {total} 호출")
 
-    on, _ = await run_arm(items, model, reps, tools, strip=False)
-    print("  텔레그램 포함 완료")
-    off, manip = await run_arm(items, model, reps, tools, strip=True)
-    print("  텔레그램 제외 완료")
+    # 포함·제외를 **섞어서** 실행한다. 한쪽을 몰아서 돌리면 제공 측 상태 변화가
+    # 조건 차이로 보일 수 있다. 실행 순서를 기록해 나중에 확인할 수 있게 둔다.
+    tasks = [(agent, r + 1, arm)
+             for agent in items for r in range(reps) for arm in ("포함", "제외")]
+    random.Random(seed).shuffle(tasks)
+
+    on, off, order = {}, {}, []
+    for i, (agent, rep, arm) in enumerate(tasks, 1):
+        prompt = (p_on if arm == "포함" else p_off)[agent]
+        raw = await call(model, prompt)
+        rec = {"rep": rep, "raw": raw, "signals": parse_signals(raw), "실행순서": i}
+        (on if arm == "포함" else off).setdefault(agent, []).append(rec)
+        order.append({"순서": i, "조건": arm, "agent": agent, "rep": rep})
+        if i % 10 == 0:
+            print(f"  {i}/{total}")
+    for d_ in (on, off):
+        for a in d_:
+            d_[a].sort(key=lambda x: x["rep"])
+    print("  실행 완료 (조건 섞어 실행, 순서 기록)")
 
     cmp_ = compare(on, off)
     res = {
-        "meta": {"date": date, "model": model, "reps": reps,
+        "meta": {"date": date, "model": model, "reps": reps, "실행순서": order,
+                 "실행순서_이유": "포함·제외를 몰아서 돌리면 제공 측 상태 변화가 조건 "
+                                  "차이로 보일 수 있어 섞어 실행하고 순서를 남긴다.",
                  "구조": "A(자유 서술) — 구조 B는 본실험 기본값으로 채택하지 않았다",
                  "조작": f"{TELEGRAM_SOURCE} global_summary 블록 제거",
                  "조작_확인": manip,
@@ -204,7 +222,9 @@ async def main(date: str, model: str, reps: int):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("date")
-    ap.add_argument("--model", default="gpt-4o-mini")
-    ap.add_argument("--reps", type=int, default=2)
+    # 최종 판단 모델 고정 (D64). 상위 단계(팩터 요약 등)는 현재 설정 유지.
+    ap.add_argument("--model", default="gpt-4.1-2025-04-14")
+    ap.add_argument("--reps", type=int, default=5)
+    ap.add_argument("--seed", type=int, default=20260924)
     a = ap.parse_args()
-    asyncio.run(main(a.date, a.model, a.reps))
+    asyncio.run(main(a.date, a.model, a.reps, a.seed))
