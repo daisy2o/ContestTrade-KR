@@ -21,7 +21,9 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "contest" / "researcher"))
 
 
-async def run_range(start: str, end: str):
+async def run_range(start: str, end: str, trigger_hour: str = "08:30:00"):
+    """trigger_hour는 재생 때 쓴 값과 같아야 한다. 09:00으로 고정돼 있어
+    08:30 재생본을 한 건도 찾지 못하던 결함을 고친 것이다."""
     from config.config import cfg
     if not cfg.llm.get("api_key"):
         sys.exit("[중단] LLM api_key 필요 (judge 호출) — OPENAI_API_KEY 또는 config_kr.yaml")
@@ -30,12 +32,14 @@ async def run_range(start: str, end: str):
 
     days = GLOBAL_KR_CLIENT.get_trade_dates(start.replace("-", ""), end.replace("-", ""))
     contest = ResearchContest()
-    done, skipped = 0, 0
+    stamp = trigger_hour.replace(":", "-")
+    done, skipped, missing = 0, 0, []
     for d8 in days:
         date = f"{d8[:4]}-{d8[4:6]}-{d8[6:]}"
-        trigger = f"{date} 09:00:00"
-        reports = list((ROOT / "agents_workspace" / "reports").rglob(f"{date}_09-00-00.json"))
+        trigger = f"{date} {trigger_hour}"
+        reports = list((ROOT / "agents_workspace" / "reports").rglob(f"{date}_{stamp}.json"))
         if not reports:
+            missing.append(date)
             skipped += 1
             continue
         current = contest.data_manager.load_current_signals(trigger)
@@ -52,9 +56,16 @@ async def run_range(start: str, end: str):
         except Exception as e:
             print(f"{date}: 콘테스트 실패 — {e}")
     print(f"\n완료 {done}일 / 건너뜀 {skipped}일 → agents_workspace/final_result/")
+    if missing:
+        print(f"[주의] 리포트 없음 {len(missing)}일 ({trigger_hour} 기준): {missing[:5]}"
+              f"{' …' if len(missing) > 5 else ''}")
+        if done == 0:
+            print("  → 한 건도 못 찾았다. 재생에 쓴 trigger_hour와 일치하는지 확인할 것.")
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        sys.exit("사용법: CONTEST_TRADE_MARKET=KR-Stock python -m evaluation.run_contest_c3 <시작일> [종료일]")
-    asyncio.run(run_range(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else sys.argv[1]))
+        sys.exit("사용법: CONTEST_TRADE_MARKET=KR-Stock python -m evaluation.run_contest_c3 "
+                 "<시작일> [종료일] [트리거시각(기본 08:30:00)]")
+    asyncio.run(run_range(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else sys.argv[1],
+                          sys.argv[3] if len(sys.argv) > 3 else "08:30:00"))

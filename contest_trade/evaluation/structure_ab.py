@@ -176,12 +176,20 @@ def expand_B(raw: str, bank) -> dict:
             "n_number_mismatch": mismatch}
 
 
-async def main(date: str, model: str, reps: int):
+async def main(date: str, model: str, reps: int, only: str = "AB"):
     items = load_inputs(date)
     if not items:
         sys.exit(f"{date} 리포트 없음")
     tools_info = _tools_info()
-    res = {"date": date, "model": model, "structures": {"A": {}, "B": {}}, "bank_sizes": {}}
+    # only="B"면 A는 기존 산출물을 재사용한다(입력·설정 동일). 회귀 점검용.
+    prev = {}
+    if only == "B":
+        pp = OUT / f"structure_ab_{date}.json"
+        if pp.exists():
+            prev = json.loads(pp.read_text()).get("structures", {}).get("A", {})
+    res = {"date": date, "model": model, "only": only,
+           "structures": {"A": prev, "B": {}}, "bank_sizes": {},
+           "note": "only=B인 경우 A는 이전 실행 산출물 재사용(입력·설정 동일)"}
     banks = {}
     for agent, d in items.items():
         banks[agent] = build_bank(d.get("background_information", ""), d.get("tool_call_context", ""))
@@ -190,11 +198,15 @@ async def main(date: str, model: str, reps: int):
 
     for r in range(reps):
         rk = f"rep{r+1}"
-        res["structures"]["A"][rk] = {}
+        if only != "B":
+            res["structures"]["A"][rk] = {}
         res["structures"]["B"][rk] = {}
         for agent, d in items.items():
-            a_out = await call(model, build_prompt_A(d, tools_info))
-            res["structures"]["A"][rk][agent] = {"raw": a_out}
+            if only != "B":
+                a_out = await call(model, build_prompt_A(d, tools_info))
+                res["structures"]["A"].setdefault(rk, {})[agent] = {"raw": a_out}
+            else:
+                a_out = (prev.get(rk, {}).get(agent, {}) or {}).get("raw", "")
             b_out = await call(model, build_prompt_B(d, render_bank(banks[agent]), tools_info))
             res["structures"]["B"][rk][agent] = {"raw": b_out, "expanded": expand_B(b_out, banks[agent])}
             inv = res["structures"]["B"][rk][agent]["expanded"]
@@ -202,7 +214,8 @@ async def main(date: str, model: str, reps: int):
                   f"(무효 {inv['n_invalid_refs']}, 수치불일치 {inv['n_number_mismatch']})")
 
     OUT.mkdir(parents=True, exist_ok=True)
-    p = OUT / f"structure_ab_{date}.json"
+    suffix = "_regression" if only == "B" else ""
+    p = OUT / f"structure_ab_{date}{suffix}.json"
     p.write_text(json.dumps(res, ensure_ascii=False, indent=1))
     print(f"\n저장: {p}")
 
@@ -212,5 +225,6 @@ if __name__ == "__main__":
     ap.add_argument("date")
     ap.add_argument("--model", default="gpt-4o-mini")
     ap.add_argument("--reps", type=int, default=2)
+    ap.add_argument("--only", default="AB", choices=["AB", "B"])
     a = ap.parse_args()
-    asyncio.run(main(a.date, a.model, a.reps))
+    asyncio.run(main(a.date, a.model, a.reps, a.only))

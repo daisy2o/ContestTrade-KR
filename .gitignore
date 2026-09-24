@@ -248,3 +248,9 @@ contest_trade/data_source/data_cache/
 data_collection/kr_secrets.yaml
 data_collection/factiva/
 contest_trade/evaluation/out/
+data_collection/openrouter_secrets.yaml
+
+# D52 공유 정책: 실기동 산출물·실험 결과 수치는 공개 저장소에 올리지 않는다.
+# 도구(코드)는 공유하고, 그 도구가 만든 결과는 공유하지 않는다.
+contest_trade/evaluation/blind/
+contest_trade/evaluation/PILOT_P1_요약.md

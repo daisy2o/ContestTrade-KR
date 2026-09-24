@@ -92,7 +92,18 @@ def _split_tools(tcc: str) -> List[tuple]:
                 if k in ("derived_returns",):
                     for k2, v2 in v.items():
                         emit(k2, v2)
-                continue          # 일별 OHLCV 등 대형 구조는 단위로 쪼개지 않음
+                elif k in ("recent_daily_ohlcv",):
+                    # 일별 OHLCV: 구조 A는 이 정보를 자유 서술에서 쓸 수 있으므로
+                    # 구조 B도 같은 정보를 ID로 고를 수 있어야 한다(가용 입력 대등화).
+                    # 날짜당 한 단위로 묶어 은행이 과도하게 커지지 않게 한다.
+                    for day, bar in v.items():
+                        if not isinstance(bar, dict):
+                            continue
+                        txt = (f"{day} 시가 {bar.get('Open')} 고가 {bar.get('High')} "
+                               f"저가 {bar.get('Low')} 종가 {bar.get('Close')} "
+                               f"거래량 {bar.get('Volume')}")
+                        out.append((tool, str(symbol), f"daily_{day}", txt))
+                continue
             if isinstance(v, list):
                 continue
             emit(k, v)
@@ -127,9 +138,26 @@ def render_bank(bank: Dict[str, EvidenceUnit], max_chars: int = 24000) -> str:
 def resolve(bank: Dict[str, EvidenceUnit], uid: str) -> dict:
     """모델이 고른 uid를 입력 문장·메타데이터로 확장 (프로그램이 채움).
 
-    kind="summary"면 quote는 팩터 요약 문장이며 기사 원문이 아니다."""
+    kind="summary"면 quote는 팩터 요약 문장이며 기사 원문이 아니다.
+
+    무효 ID는 **실패로 기록**한다. 비슷한 ID로 임의 연결하거나 조용히 버리지 않는다
+    (접두사만 틀린 경우도 자동 교정하지 않고 사유만 남긴다 — 교정하면 모델의
+    지목 실패가 측정에서 사라진다)."""
     u = bank.get(uid)
     if u is None:
-        return {"uid": uid, "valid": False, "error": "존재하지 않는 근거 ID"}
+        # 진단용 사유 분류 — 교정에는 쓰지 않는다
+        import re as _re
+        m = _re.fullmatch(r"([A-Za-z]+)\s*(\d+)", uid.strip())
+        reason = "존재하지 않는 근거 ID"
+        if m:
+            num = m.group(2)
+            for pref in ("S", "T"):
+                if f"{pref}{num}" in bank:
+                    reason = (f"접두사 오류 추정: '{uid}' — 은행에는 '{pref}{num}'이 존재"
+                              f" (자동 연결하지 않음)")
+                    break
+            else:
+                reason = f"번호 {num}에 해당하는 S/T 단위 없음"
+        return {"uid": uid, "valid": False, "error": reason, "failed": True}
     return {"uid": uid, "valid": True, "kind": u.kind, "source": u.source,
             "quote": u.text, "meta": u.meta}

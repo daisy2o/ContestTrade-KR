@@ -61,10 +61,14 @@ JSON만 출력하세요. 설명 문장을 앞뒤에 붙이지 마세요.
 {{"verdict": "지지됨|반박됨|근거부족|판정불가", "quote": "판정 근거가 된 입력 구절(최대 120자, 없으면 빈 문자열)", "why": "한 문장 사유"}}"""
 
 
-def call(key: str, model: str, source: str, claim: str, retries: int = 3) -> dict:
+def call(key: str, model: str, source: str, claim: str, retries: int = 3,
+         prompt: str = None) -> dict:
+    """prompt를 주지 않으면 이 모듈의 PROMPT를 쓴다. 다른 시험은 자기 프롬프트를 넘긴다
+    (넘기지 않으면 라벨 체계가 어긋나 채점이 전부 '보류'로 떨어진다)."""
+    tpl = prompt or PROMPT
     body = {
         "model": model,
-        "messages": [{"role": "user", "content": PROMPT.format(source=source[:20000], claim=claim)}],
+        "messages": [{"role": "user", "content": tpl.format(source=source[:20000], claim=claim)}],
         "temperature": 0,
         "max_tokens": 400,
         "provider": {"allow_fallbacks": False},   # 제공자 자동 대체 제한
@@ -114,10 +118,16 @@ def score(rows: list, flag_as_problem=("반박됨", "근거부족")) -> dict:
             "보류율": round((hold_p + hold_c) / (np_ + nc), 3) if (np_ + nc) else None}
 
 
-def main(split: str, models: list, limit: int):
+def main(split: str, models: list, limit: int, dataset: str = "jev"):
     key = yaml.safe_load(SECRETS.read_text())["openrouter_api_key"]
-    data = json.loads(DATASET.read_text())
-    rows = data[split][:limit] if limit else data[split]
+    if dataset == "counterfactual":
+        # 입력 변경 대조 진단 세트 (본 시험과 조건이 달라 점수를 직접 비교하지 않는다)
+        cf = json.loads((ROOT / "evaluation" / "out" / "counterfactual_set.json").read_text())
+        rows = cf["cases"][:limit] if limit else cf["cases"]
+        split = "counterfactual"
+    else:
+        data = json.loads(DATASET.read_text())
+        rows = data[split][:limit] if limit else data[split]
     print(f"{split}: {len(rows)}건 (problem {sum(1 for r in rows if r['gold']=='problem')})")
 
     out = {"split": split, "models": {}}
@@ -149,11 +159,29 @@ def main(split: str, models: list, limit: int):
             "verdict_분포": {v: sum(1 for x in res if x.get("verdict") == v) for v in VERDICTS},
             "results": res,
         }
+        if any("variant" in x for x in res):
+            from collections import Counter as _C
+            byv = {}
+            for v in ("원본", "회사변경", "날짜변경", "합산범위변경"):
+                sub = [x for x in res if x.get("variant") == v]
+                byv[v] = dict(_C(str(x.get("verdict")) for x in sub))
+            out["models"][model]["variant별_판정"] = byv
+            print("  variant별 판정:", json.dumps(byv, ensure_ascii=False))
         m = out["models"][model]["metrics"]
         print(f"  오통과율 {m['오통과율']} / 오차단율 {m['오차단율']} / 보류율 {m['보류율']} "
               f"/ 핵심유형 오통과 {kt_missed}/{len(key_types)} / ${cost:.4f} / 제공자 {providers}")
 
     p = ROOT / "evaluation" / "out" / f"verifier_bench_{split}.json"
+    # 후보를 나눠 실행해도 결과가 덮어써지지 않도록 병합 (같은 split 안에서만)
+    if p.exists():
+        try:
+            prev = json.loads(p.read_text())
+            if prev.get("split") == split:
+                merged = dict(prev.get("models", {}))
+                merged.update(out["models"])
+                out["models"] = merged
+        except Exception:
+            pass
     p.write_text(json.dumps(out, ensure_ascii=False, indent=1))
     print(f"\n저장: {p}")
 
@@ -163,5 +191,6 @@ if __name__ == "__main__":
     ap.add_argument("--split", default="dev", choices=["dev", "test"])
     ap.add_argument("--models", default="deepseek/deepseek-chat-v3-0324,qwen/qwen3-235b-a22b-2507")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--dataset", default="jev", choices=["jev", "counterfactual"])
     a = ap.parse_args()
-    main(a.split, [m.strip() for m in a.models.split(",")], a.limit)
+    main(a.split, [m.strip() for m in a.models.split(",")], a.limit, a.dataset)
