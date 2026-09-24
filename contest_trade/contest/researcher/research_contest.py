@@ -174,47 +174,66 @@ class ResearchContest:
         
         return output_lines
 
-    async def train_prediction_model(self) -> bool:
-        try:
-            model_dir = Path(__file__).parent / "lightgbm_predictor"
-            mean_model_path = model_dir / "lgbm_mean_model.joblib"
-            std_model_path = model_dir / "lgbm_std_model.joblib"
-            
-            if mean_model_path.exists() and std_model_path.exists():
-                success = self.predictor._load_lightgbm_models()
-                if self.predictor.use_lightgbm:
-                    print("✅ 成功导入现有的LightGBM模型，跳过训练")
-                    return True
-                else:
-                    print("⚠️ 现有模型加载失败，将重新训练")
-            else:
-                print("🔍 未发现现有模型文件，需要训练新模型")
-                if not mean_model_path.exists():
-                    print(f"   缺失文件: {mean_model_path}")
-                if not std_model_path.exists():
-                    print(f"   缺失文件: {std_model_path}")
-            
-            print("🤖 开始训练新的Research预测模型...")
-            
-            training_data = self._collect_historical_training_data()
-            
-            if not training_data:
-                print("❌ 没有可用的训练数据")
-                return False
+    async def train_prediction_model(self, as_of_date: str = None) -> dict:
+        """as-of 시점까지의 자료만으로 학습한다. **폴백을 조용히 쓰지 않는다.**
 
-            success = self.predictor.train_lightgbm_model(training_data)
-            
-            if success:
-                print("✅ Research预测模型训练完成")
-                print(f"   模型已保存到: {model_dir}")
+        돌려주는 dict의 `method`는 셋 중 하나다:
+          lightgbm / judge_fallback / insufficient_history
+        서로 다른 방식의 결과를 같은 C3로 합치지 않기 위해 호출부가 이 값을 기록한다.
+        """
+        from contest.researcher import training_asof as TA
+
+        model_dir = Path(__file__).parent / "lightgbm_predictor"
+        if as_of_date is None:
+            return {"method": TA.METHOD_JUDGE,
+                    "사유": "as_of_date 미지정 — 학습 시도 자체를 하지 않는다"}
+        try:
+            # ③ 모델 파일의 시점 제한: 학습 as-of 가 판단일보다 뒤면 재사용 거부
+            usable, why = TA.model_usable_for(model_dir, as_of_date)
+            if usable:
+                self.predictor._load_lightgbm_models()
+                if self.predictor.use_lightgbm:
+                    return {"method": TA.METHOD_LIGHTGBM, "사유": f"기존 모델 재사용 — {why}"}
             else:
-                print("❌ Research预测模型训练失败")
-            
-            return success
-            
-        except Exception as e:
-            print(f"❌ Research预测模型训练/导入异常: {e}")
-            return False
+                print(f"🔒 기존 모델 재사용 불가: {why}")
+
+            training_data = self._collect_historical_training_data(as_of_date)
+            if not training_data:
+                return {"method": TA.METHOD_INSUFFICIENT, "사유": "학습 자료 0건",
+                        "진단": {"수집된_신호수(파일 기준)": 0,
+                                 "유효_학습표본수(보상 확정)": 0}}
+
+            # 유효 (특징, 보상) 쌍을 센다 — 파일 수가 아니다
+            pairs = []
+            for agent_name, signals in training_data.items():
+                for sig in signals:
+                    r = None
+                    if getattr(sig, "contest_data", None):
+                        r = sig.contest_data.get("reward")
+                    if r is None:
+                        try:
+                            r = await self.data_manager.calculate_signal_reward(sig)
+                        except Exception:
+                            r = None
+                    pairs.append((sig, r))
+            diag = TA.summarize(pairs)
+            method, why = TA.decide_method(diag)
+            if method != TA.METHOD_LIGHTGBM:
+                # 부족한 자료를 억지로 학습시켜 '완료'로 처리하지 않는다
+                return {"method": method, "사유": why, "진단": diag, "as_of": as_of_date}
+
+            ok = self.predictor.train_lightgbm_model(training_data)
+            if not ok:
+                return {"method": TA.METHOD_JUDGE, "사유": "LightGBM 학습 실패",
+                        "진단": diag, "as_of": as_of_date}
+            TA.save_train_meta(model_dir, as_of_date,
+                               diag["유효_학습표본수(보상 확정)"], diag)
+            return {"method": TA.METHOD_LIGHTGBM, "사유": why, "진단": diag,
+                    "as_of": as_of_date}
+
+        except Exception as e:  # noqa: BLE001
+            return {"method": TA.METHOD_JUDGE, "사유": f"학습 경로 예외: {e}",
+                    "as_of": as_of_date}
 
     def get_model_status(self) -> Dict[str, Any]:
         model_dir = Path(__file__).parent / "lightgbm_predictor"
@@ -240,18 +259,35 @@ class ResearchContest:
         
         return status
 
-    def _collect_historical_training_data(self) -> Dict[str, List]:
-        """收集历史数据作为训练数据"""
+    def _collect_historical_training_data(self, as_of_date: str = None) -> Dict[str, List]:
+        """학습 자료 수집 — **재생 판단 시각(as_of_date) 기준**.
 
-        print("📊 开始收集历史训练数据...")
-        
+        기존 구현은 `datetime.now()`(실행 시점)로 180일을 훑어, 재생 실험에서
+        판단 시각과 무관한 자료를 학습에 넣었다. as_of_date를 명시적으로 받는다.
+
+        시점 제한을 두 겹으로 건다:
+          ① 특징: 신호 생성일 < as_of_date
+          ② 정답: 보상 계산에 필요한 가격이 as_of_date 이전에 확정된 것만
+                  (`load_historical_signals`가 이미 보상 확정 규칙을 적용한다)
+        """
+        from contest.researcher.training_asof import TRAIN_WINDOW_DAYS
+
+        if as_of_date is None:
+            raise ValueError(
+                "as_of_date가 필요하다. datetime.now() 기준 수집은 재생 실험에서 "
+                "미래 자료를 학습에 넣는다 — 명시적으로 판단일을 넘길 것.")
+
+        print(f"📊 학습 자료 수집 (as-of {as_of_date}, 창 {TRAIN_WINDOW_DAYS}일)")
+
         training_data = {}
-        current_date = datetime.now()
+        current_date = datetime.strptime(as_of_date, "%Y-%m-%d")
         valid_days = 0
-        
-        for days_back in range(180, 0, -1):
+
+        for days_back in range(TRAIN_WINDOW_DAYS, 0, -1):
             date = current_date - timedelta(days=days_back)
             date_str = date.strftime("%Y-%m-%d")
+            if date_str >= as_of_date:      # ① 특징의 시점 제한
+                continue
             
             try:
                 day_signals = self.data_manager.load_historical_signals(date_str)
@@ -272,11 +308,12 @@ class ResearchContest:
             except Exception as e:
                 continue
         
-        # 统计训练数据
+        # ⚠️ 아래 수는 **파일 기준 신호 수**이지 유효 학습 표본 수가 아니다.
+        # 보상이 확정된 쌍의 수·결측·분포는 train_prediction_model에서 별도로 센다.
         total_samples = sum(len(signals) for signals in training_data.values())
-        print(f"📈 收集了 {valid_days} 天的历史数据")
-        print(f"总计 {total_samples} 个训练样本，覆盖 {len(training_data)} 个agents")
-        
+        print(f"📈 {valid_days}일치 수집 | 신호 {total_samples}건(파일 기준), "
+              f"agent {len(training_data)}개")
+
         return training_data
 
     async def _evaluate_missing_signals(self, agent_signals: Dict[str, List[Optional[SignalData]]], current_date: str):

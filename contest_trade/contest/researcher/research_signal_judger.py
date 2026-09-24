@@ -261,10 +261,23 @@ Format notes:
         for agent_name in agent_names:
             agent_returns = []
             
-            # 查找过去window_m天的信号
+            # 누수 차단: 판정기도 과거 '보상'을 쓰므로 콘테스트와 같은 규칙을 적용한다.
+            # days_back=1(직전 거래일) 신호의 보상은 **판단일 당일 시가**를 필요로 하는데
+            # 판단 시각 08:30은 개장 전이라 그 값이 없다.
+            # (load_historical_signals만 고치고 여기를 빼면 누수가 판정기로 새어 든다.)
+            try:
+                from contest.researcher.reward_availability import eligible_history_dates
+                from utils.kr_data_utils import GLOBAL_KR_CLIENT
+                allowed = set(eligible_history_dates(
+                    current_dt.strftime("%Y-%m-%d"), self.window_m, GLOBAL_KR_CLIENT))
+            except Exception:
+                allowed = None
+
             for days_back in range(1, self.window_m + 1):
                 history_date = current_dt - timedelta(days=days_back)
                 history_date_str = history_date.strftime("%Y-%m-%d")
+                if allowed is not None and history_date_str not in allowed:
+                    continue
                 
                 history_signals = self.data_manager.load_signals_data(history_date_str)
                 
