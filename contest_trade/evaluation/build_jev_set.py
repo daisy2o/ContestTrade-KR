@@ -28,7 +28,7 @@ RECOUNT = ROOT / "evaluation" / "out" / "structure_recount_2026-05-07.json"
 REPORTS = ROOT / "agents_workspace" / "reports"
 OUT = ROOT / "evaluation" / "out" / "jev_dataset.json"
 
-PROBLEM_VERDICTS = {"사실오류"}
+PROBLEM_VERDICTS = {"사실오류", "원문미발견"}
 PROBLEM_EXCESS = {"사실추가"}
 
 
@@ -40,6 +40,21 @@ def load_banks():
         banks[p.parent.name] = build_bank(d.get("background_information", ""),
                                           d.get("tool_call_context", ""))
     return banks
+
+
+def load_full_inputs():
+    """(날짜, 에이전트) -> 그 실행의 고정 입력 전체.
+
+    검증기에게는 문장 단편이 아니라 '모델이 실제로 받은 입력'을 줘야 공정하다.
+    단편만 주면 그 단편이 담지 않은 부분을 근거 없음으로 오판한다(1차 시험의 실패)."""
+    full = {}
+    for p in sorted(REPORTS.rglob("*_08-30-00.json")):
+        date = p.stem.split("_")[0]
+        d = json.loads(p.read_text())
+        bg = d.get("background_information", "")
+        tools = d.get("tool_call_context", "")
+        full[(date, p.parent.name)] = (bg + "\n\n[도구 출력]\n" + tools)[:24000]
+    return full
 
 
 def source_for(ev: dict, banks: dict) -> str:
@@ -54,7 +69,7 @@ def source_for(ev: dict, banks: dict) -> str:
     return " / ".join(parts)
 
 
-def load_blind_items():
+def load_blind_items(full):
     """블라인드 감사 3일 결과에서 사례 수집 (v2 재판정 반영).
 
     quote가 그 근거가 기댄 입력 항목 역할을 하므로 검증기 시험에 쓸 수 있다.
@@ -74,17 +89,17 @@ def load_blind_items():
         d = json.loads(p.read_text())
         for setk in ("set_A", "set_B"):
             for i, e in enumerate(d.get(setk, {}).get("evidences", [])):
-                quote = (e.get("quote") or "").strip()
-                if not quote:
+                src = full.get((date, e.get("agent")), "")
+                if not src:
                     continue
                 head = (e.get("evidence_head") or "")[:30]
                 verdict = recheck.get((date, setk, head), e.get("verdict"))
-                is_problem = "사실오류" in (verdict or "")
+                is_problem = any(k in (verdict or "") for k in ("사실오류", "원문미발견"))
                 out.append({
                     "id": f"BL-{date[-5:]}-{setk[-1]}{i}",
                     "structure": f"blind-{setk[-1]}", "rep": date,
                     "agent": e.get("agent"), "symbol": e.get("symbol"),
-                    "source_text": quote,
+                    "source_text": src,
                     "claim": e.get("evidence_head", ""),
                     "gold": "problem" if is_problem else "clean",
                     "gold_detail": verdict or "",
@@ -97,14 +112,15 @@ def load_blind_items():
 def main(seed: int = 7):
     d = json.loads(RECOUNT.read_text())
     banks = load_banks()
+    full = load_full_inputs()
     items = []
     for struct in ("A", "B"):
         for i, ev in enumerate(d.get(struct, {}).get("evidences", [])):
             is_problem = (ev.get("verdict") in PROBLEM_VERDICTS) or \
                          (ev.get("excess_type") in PROBLEM_EXCESS)
-            src = source_for(ev, banks)
+            src = full.get(("2026-05-07", ev.get("agent")), "")
             if not src:
-                continue          # 대응 입력을 특정 못한 건은 검증기 시험에 부적합
+                continue
             items.append({
                 "id": f"{struct}{i}",
                 "structure": struct,
@@ -116,7 +132,7 @@ def main(seed: int = 7):
                 "요약_결함": ev.get("요약_결함", False),
                 "reason": (ev.get("reason") or "")[:200],
             })
-    items += load_blind_items()
+    items += load_blind_items(full)
     # 같은 주장이 여러 감사에 중복 등장하면 한 번만
     seen, dedup = set(), []
     for x in items:
