@@ -141,20 +141,23 @@ def main(seed: int = 7):
             continue
         seen.add(k); dedup.append(x)
     items = dedup
-    prob = [x for x in items if x["gold"] == "problem"]
-    clean = [x for x in items if x["gold"] == "clean"]
+    # 분할은 **판단일 단위**로 한다. 무작위로 나누면 같은 날의 같은 팩터 요약이
+    # dev·test 양쪽에 들어가 source가 공유되고, test가 독립 검증이 못 된다.
+    def date_of(x):
+        r = str(x.get("rep") or "")
+        return r if r.startswith("2026-") else "2026-05-07"   # structure 유래는 전부 5/07
+    dev = [x for x in items if date_of(x) == "2026-05-07"]
+    test = [x for x in items if date_of(x) != "2026-05-07"]
     rng = random.Random(seed)
-    rng.shuffle(prob); rng.shuffle(clean)
-    # 오류 사례가 적으므로 dev에 절반, test에 절반 — 양쪽 모두 정상 사례를 섞는다
-    half_p, half_c = len(prob) // 2, len(clean) // 2
-    dev = prob[:half_p] + clean[:half_c]
-    test = prob[half_p:] + clean[half_c:]
     rng.shuffle(dev); rng.shuffle(test)
-    out = {"meta": {"source": "structure_recount_2026-05-07", "seed": seed,
-                    "note": "gold는 감사 판정. 검증기에게 보여주지 말 것. dev로 임계값 조정, test는 1회만."},
+    out = {"meta": {"source": "structure_recount + blind audits", "seed": seed,
+                    "split_rule": "판단일 단위 — dev=2026-05-07, test=2026-05-29·2026-06-04. "
+                                  "무작위 분할 시 같은 날 팩터 요약이 양쪽에 공유돼 test가 오염됨",
+                    "note": "gold는 감사 판정. 검증기에게 보여주지 말 것. dev로 설정 조정, test는 1회만."},
            "dev": dev, "test": test}
     OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1))
-    print(f"전체 {len(items)}건 (problem {len(prob)} / clean {len(clean)})")
+    n_prob = sum(1 for x in items if x["gold"] == "problem")
+    print(f"전체 {len(items)}건 (problem {n_prob} / clean {len(items)-n_prob})")
     print(f"dev {len(dev)}건 (problem {sum(1 for x in dev if x['gold']=='problem')})")
     print(f"test {len(test)}건 (problem {sum(1 for x in test if x['gold']=='problem')})")
     print(f"저장: {OUT}")
