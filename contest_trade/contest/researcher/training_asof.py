@@ -39,6 +39,8 @@ def model_meta_path(model_dir: Path) -> Path:
 
 
 def save_train_meta(model_dir: Path, as_of: str, n_samples: int, diag: dict) -> None:
+    """as_of 는 'YYYY-MM-DD HH:MM:SS' 로 저장한다 — 날짜만으로는 같은 날 08:30 이후
+    정보로 학습한 모델을 걸러내지 못한다."""
     Path(model_dir).mkdir(parents=True, exist_ok=True)
     model_meta_path(model_dir).write_text(json.dumps(
         {"as_of": as_of, "n_samples": n_samples, "진단": diag,
@@ -47,8 +49,14 @@ def save_train_meta(model_dir: Path, as_of: str, n_samples: int, diag: dict) -> 
         ensure_ascii=False, indent=1))
 
 
-def model_usable_for(model_dir: Path, judgment_date: str) -> tuple:
-    """(사용 가능 여부, 사유). 학습 as-of 가 판단일보다 뒤면 거부한다."""
+def model_usable_for(model_dir: Path, judgment_date: str,
+                     trigger_hour: str = "08:30:00") -> tuple:
+    """(사용 가능 여부, 사유). 학습 as-of 가 판단 **시각**보다 뒤면 거부한다.
+
+    날짜만 비교하면 안 된다 — 같은 날짜라도 08:30 **이후** 정보로 학습한 모델은
+    그 판단에 쓸 수 없다. 그래서 as_of 를 'YYYY-MM-DD HH:MM:SS'로 비교한다.
+    """
+    judgment_dt = f"{judgment_date} {trigger_hour}"
     p = model_meta_path(model_dir)
     if not p.exists():
         return False, "학습 메타(train_meta.json) 없음 — 어느 시점 자료로 학습됐는지 알 수 없다"
@@ -59,11 +67,12 @@ def model_usable_for(model_dir: Path, judgment_date: str) -> tuple:
     as_of = meta.get("as_of")
     if not as_of:
         return False, "학습 메타에 as_of 없음"
-    if as_of > judgment_date:
-        return False, (f"모델 학습 as_of({as_of})가 판단일({judgment_date})보다 뒤 — "
+    as_of_dt = as_of if len(as_of) > 10 else f"{as_of} 00:00:00"
+    if as_of_dt > judgment_dt:
+        return False, (f"모델 학습 as_of({as_of_dt})가 판단 시각({judgment_dt})보다 뒤 — "
                        f"미래 정보 재사용이므로 거부")
     stale = (datetime.strptime(judgment_date, "%Y-%m-%d")
-             - datetime.strptime(as_of, "%Y-%m-%d")).days
+             - datetime.strptime(as_of[:10], "%Y-%m-%d")).days
     if stale > RETRAIN_EVERY_DAYS:
         return False, f"학습 as_of({as_of})가 {stale}일 지남 — 재학습 주기({RETRAIN_EVERY_DAYS}일) 초과"
     return True, f"사용 가능 (학습 as_of={as_of}, {stale}일 전)"
