@@ -17,9 +17,15 @@
 
 확률의 의미:
     p_{a,d,s} = P(다음 거래일 시가 > 당일 시가)  — 출력의 `<p_up>`
-    출력의 `<probability>`는 **선택 방향의 적중 확률**이라 그대로 쓰면 안 된다.
-    sell에서 1−probability는 '상승 또는 보합' 확률이 되고, 보합을 양쪽 무적중으로
-    둔 규칙 아래서는 상승 확률로 환산할 수 없다.
+
+    ⚠️ **같은 사건을 두 번 추정하게 하지 않는다.** buy의 '선택 방향 적중 확률'은
+    정의상 p_up과 **같은 사건**이므로 두 값이 다르면 그것은 분리가 아니라
+    **의미 불일치**다(실측으로 67 vs 62가 나왔고, 이는 결함이다).
+    새 출력은 `<p_up>`(엄격 상승)과 `<p_down>`(엄격 하락)만 받고,
+    방향 적중 확률은 **시스템이 유도**한다: buy → p_up, sell → p_down.
+
+    두 값은 여집합이 아니다. 나머지 1−p_up−p_down 이 보합이므로
+    **p_up + p_down ≤ 1** 을 검사한다. 넘으면 그 신호는 확률 결함으로 기록한다.
 
 미제출·기권 처리:
     U_d 는 **출력을 보기 전에 정한 공통 평가 종목군**이다.
@@ -72,8 +78,13 @@ def classify(blk: str) -> str:
 
 
 def agent_probs(raw: str, universe: list) -> tuple:
-    """한 실행 → {종목: p_up}. 제출하지 않은 종목은 넣지 않는다(호출부가 0.5로 채운다)."""
-    out, kinds, missing_pup = {}, Counter(), 0
+    """한 실행 → {종목: p_up}. 제출하지 않은 종목은 넣지 않는다(호출부가 0.5로 채운다).
+
+    실패 종류를 **기권과 섞지 않고** 따로 센다:
+      · p_up_누락      : 필수 확률이 없음 → 실행 실패로 기록, 0.5 기본값 적용
+      · 확률합_초과    : p_up + p_down > 1 → 확률 결함으로 기록(값은 살려 쓰되 표시)
+    """
+    out, kinds = {}, Counter()
     for blk in SIG.findall(raw or ""):
         kind = classify(blk)
         kinds[kind] += 1
@@ -83,14 +94,19 @@ def agent_probs(raw: str, universe: list) -> tuple:
         if sym not in universe:
             kinds["유니버스밖"] += 1
             continue
-        p = _pct(_f("p_up", blk))
-        if p is None:
-            # p_up이 없으면 **환산하지 않는다.** probability는 방향 적중 확률이라
-            # sell에서 1-p 로 바꾸면 '상승 또는 보합'이 된다.
-            missing_pup += 1
+        pu, pd = _pct(_f("p_up", blk)), _pct(_f("p_down", blk))
+        if pu is None:
+            kinds["p_up_누락(실행실패)"] += 1
             continue
-        out[sym] = min(max(p, 0.0), 1.0)
-    return out, kinds, missing_pup
+        if pd is not None and pu + pd > 1.0 + 1e-9:
+            kinds["확률합_초과"] += 1
+        # 파생: 방향 적중 확률은 모델이 아니라 시스템이 만든다
+        act = _f("action", blk).lower()
+        derived = pu if act == "buy" else (pd if pd is not None else None)
+        if derived is not None:
+            kinds["방향적중확률_유도됨"] += 1
+        out[sym] = min(max(pu, 0.0), 1.0)
+    return out, kinds, kinds.get("p_up_누락(실행실패)", 0)
 
 
 def combine(weights: dict, per_agent: dict, universe: list) -> dict:
@@ -142,7 +158,6 @@ def evaluate(runs: dict, weights_by_date: dict, universe_by_date: dict,
             pa[a] = probs
             for k, n in kinds.items():
                 diag[d][k] += n
-            diag[d]["p_up_누락"] += miss
             diag[d]["미제출_종목"] += len(u) - len(probs)
         per_agent_by_date[d] = pa
 
