@@ -63,6 +63,10 @@ DEV_DATES = ["2026-05-07", "2026-05-29", "2026-06-04"]
 CANDIDATES = {
     "gpt-4o-mini": {"api": "openai", "공개": "2024-07", "비고": "현 기준선"},
     "gpt-4.1": {"api": "openai", "공개": "2025-04", "비고": "cutoff 2024-06-01 문서화"},
+    # 실제 운용에 고정할 스냅샷. 별칭 gpt-4.1은 시간이 지나면 다른 스냅샷을 가리킬 수
+    # 있으므로, 본실험은 반드시 이 ID로 돌린다(D64).
+    "gpt-4.1-2025-04-14": {"api": "openai", "공개": "2025-04",
+                           "비고": "운용 고정 스냅샷 — cutoff 2024-06-01 문서화"},
     "deepseek/deepseek-chat-v3-0324": {"api": "openrouter", "공개": "2025-03",
                                        "비고": "D9(9/12) 베이스 탈락 판정 이력 — 기준 ② 완화 전"},
     "qwen/qwen3-235b-a22b-2507": {"api": "openrouter", "공개": "2025-07",
@@ -71,7 +75,8 @@ CANDIDATES = {
 
 # OpenAI는 usage에 비용을 주지 않으므로 토큰 × 단가로 계산한다 (USD per 1M tokens).
 # 단가가 바뀌면 여기만 고친다. OpenRouter는 usage.cost를 그대로 쓴다.
-PRICE = {"gpt-4o-mini": (0.15, 0.60), "gpt-4.1": (2.00, 8.00), "gpt-4.1-mini": (0.40, 1.60)}
+PRICE = {"gpt-4o-mini": (0.15, 0.60), "gpt-4.1": (2.00, 8.00),
+         "gpt-4.1-2025-04-14": (2.00, 8.00), "gpt-4.1-mini": (0.40, 1.60)}
 
 NUM = re.compile(r"\d[\d,]*(?:\.\d+)?")
 SIG_RE = re.compile(r"<signal>(.*?)</signal>", re.S)

@@ -16,6 +16,15 @@ llm:
   api_key: ""   # YOUR_OPENAI_API_KEY (US E2E 실행에 쓴 팀 키 재사용)
   model_name: "gpt-4o-mini"
 
+# 최종 판단 전용 (D64, 2026-09-24). 종목·방향·근거를 생성하는 단계만 이 모델을 쓴다.
+# 팩터 요약·계획·도구 선택은 위 llm을 그대로 유지 — 동시에 바꾸면 무엇이
+# 달라졌는지 구분할 수 없다. 버전은 스냅샷으로 고정한다.
+llm_judgment:
+  provider: "openai"
+  base_url: "https://api.openai.com/v1"
+  api_key: ""        # 비우면 llm.api_key를 쓴다
+  model_name: "gpt-4.1-2025-04-14"
+
 llm_thinking:
   provider: "openai"
   base_url: "https://api.openai.com/v1"

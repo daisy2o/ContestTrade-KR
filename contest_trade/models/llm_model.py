@@ -682,6 +682,26 @@ GLOBAL_LLM_CONFIG = LLMModelConfig(
 )
 GLOBAL_LLM = LLMModel(GLOBAL_LLM_CONFIG)
 
+# 최종 판단 전용 모델 (D64). 종목·방향·근거를 **생성하는 단계만** 이 모델을 쓴다.
+# 팩터 요약·계획·도구 선택 등 상위 입력 생성은 GLOBAL_LLM 그대로 둔다 —
+# 동시에 바꾸면 무엇이 달라졌는지 구분할 수 없다.
+# 설정이 없으면 GLOBAL_LLM으로 떨어져 기존 동작을 유지한다.
+try:
+    _j = getattr(cfg, "llm_judgment", None) or {}
+    if not _j.get("model_name"):
+        raise ValueError("llm_judgment.model_name 없음")
+    GLOBAL_JUDGMENT_LLM_CONFIG = LLMModelConfig(
+        provider=_j.get("provider", cfg.llm.get("provider", "openai")),
+        model_name=_j["model_name"],
+        api_key=_j.get("api_key") or cfg.llm.get("api_key"),
+        base_url=_j.get("base_url") or cfg.llm.get("base_url"),
+    )
+    GLOBAL_JUDGMENT_LLM = LLMModel(GLOBAL_JUDGMENT_LLM_CONFIG)
+    print(f"[판단 모델] 최종 판단 단계: {_j['model_name']} (그 외 단계: {cfg.llm['model_name']})")
+except Exception as e:
+    print(f"[판단 모델] llm_judgment 미설정 — 최종 판단도 {cfg.llm['model_name']} 사용 ({e})")
+    GLOBAL_JUDGMENT_LLM = GLOBAL_LLM
+
 try:
     thinking_provider = cfg.llm_thinking.get("provider", detect_provider(cfg.llm_thinking["model_name"], cfg.llm_thinking.get("base_url")))
     GLOBAL_THINKING_LLM_CONFIG = LLMModelConfig(

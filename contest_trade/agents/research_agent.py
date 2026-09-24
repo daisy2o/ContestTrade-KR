@@ -19,7 +19,7 @@ from langgraph.graph import StateGraph, END
 from utils.llm_utils import count_tokens
 
 from agents.prompts import prompt_for_research_plan, prompt_for_research_choose_tool, prompt_for_research_write_result, prompt_for_research_invest_task, prompt_for_research_invest_output_format
-from models.llm_model import GLOBAL_LLM, GLOBAL_THINKING_LLM
+from models.llm_model import GLOBAL_JUDGMENT_LLM, GLOBAL_LLM, GLOBAL_THINKING_LLM
 from tools.tool_utils import ToolManager, ToolManagerConfig
 from config.config import cfg, PROJECT_ROOT
 from langchain_core.runnables import RunnableConfig
@@ -311,10 +311,12 @@ class ResearchAgent:
                 output_language=self.config.output_language,
             )
             messages = [{"role": "user", "content": prompt}]
+            # 최종 판단 단계 — 종목·방향·근거를 생성하는 곳. 전용 모델을 쓴다(D64).
+            # 계획·도구 선택은 위쪽에서 GLOBAL_LLM을 그대로 쓴다.
             if cfg.llm_thinking.get("api_key", None):
                 result_result = await GLOBAL_THINKING_LLM.a_run(messages, verbose=False, thinking=True, max_retries=5)
             else:
-                result_result = await GLOBAL_LLM.a_run(messages, verbose=False, thinking=False, max_retries=5)
+                result_result = await GLOBAL_JUDGMENT_LLM.a_run(messages, verbose=False, thinking=False, max_retries=5)
             state["final_result"] = result_result.content
             state["final_result_thinking"] = result_result.reasoning_content
             
