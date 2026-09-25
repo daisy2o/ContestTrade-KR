@@ -120,6 +120,24 @@ async def main(dates: list, reps: int, regenerate: bool):
         methods[date] = v.get("method", "미상")
 
     res = evaluate(runs, weights, {d: UNIVERSE for d in dates}, truth)
+
+    # 실행에 **실제로 사용한 집계 방식**을 이름과 상태에 반영한다.
+    # 학습 표본 부족(training_status)과 실제 사용 방식(aggregation_method)을 분리 기록.
+    agg = ("judge_fallback" if all(m in ("insufficient_history", "judge_fallback")
+                                   for m in methods.values()) else "lightgbm")
+    if agg == "judge_fallback" and "C3_콘테스트" in res["결과"]:
+        res["결과"]["C3-judge"] = res["결과"].pop("C3_콘테스트")
+        res["주_비교"]["이름"] = "BS(C3-judge) − BS(C2)"
+    res["실행_상태"] = {
+        "training_status": ("insufficient_history"
+                            if any(m == "insufficient_history" for m in methods.values())
+                            else "trained"),
+        "aggregation_method": agg,
+        "구분": "학습 표본 부족(training_status)과 실행에 실제 사용한 방식"
+                "(aggregation_method)은 다른 항목이다.",
+        "해석": ("본래 LightGBM 기반 C3의 성능에 대해서는 **아직 결론을 내릴 수 없다**. "
+                 "이 수치는 judge 가중 방식의 결과다."),
+    }
     res["파일럿"] = {
         "날짜": dates, "종목군": UNIVERSE, "종목수": len(UNIVERSE),
         "판단모델": MODEL, "반복": reps,

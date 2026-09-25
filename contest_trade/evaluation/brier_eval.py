@@ -163,7 +163,7 @@ def evaluate(runs: dict, weights_by_date: dict, universe_by_date: dict,
 
     results = {}
     for name, kind in conds.items():
-        preds = {}
+        preds, perm_preds = {}, {}
         for d, pa in per_agent_by_date.items():
             u = universe_by_date[d]
             if kind == "single":
@@ -176,13 +176,79 @@ def evaluate(runs: dict, weights_by_date: dict, universe_by_date: dict,
                 if not w:
                     w = {x: 1.0 / len(agents) for x in agents}   # 이력 부족 → 동일가중
             else:
+                # ⚠️ C4는 '확률을 평균한 뒤 채점'이 아니라 **'각 순열을 채점한 뒤 평균'**이다.
+                #    mean_π(p_π − y)² = (mean_π p_π − y)² + Var_π(p_π)
+                #                     = BS(C2)          + 순열 간 분산
+                #    앞의 식(평균 예측의 Brier)은 C2와 항등이라 대조가 되지 않는다.
+                #    필요한 것은 '가중치 배정을 무작위로 했을 때 기대되는 손실'이다.
                 base = weights_by_date.get(d) or {x: 1.0 / len(agents) for x in agents}
-                perms = shuffle_assignments(base)
-                ps = [combine(pp, pa, u) for pp in perms]
-                preds[d] = {s: sum(p[s] for p in ps) / len(ps) for s in u}
+                perm_preds[d] = [combine(pp, pa, u) for pp in shuffle_assignments(base)]
                 continue
             preds[d] = combine(w, pa, u)
-        results[name] = {"BS": brier(preds, truth), "날짜수": len(preds)}
+        if kind == "shuffle":
+            # 순열별로 채점한 뒤 평균 — 배정을 무작위로 했을 때의 기대 손실
+            per_perm = []
+            n_perm = len(next(iter(perm_preds.values()))) if perm_preds else 0
+            for i in range(n_perm):
+                per_perm.append(brier({d: v[i] for d, v in perm_preds.items()}, truth))
+            vals = [b for b in per_perm if b is not None]
+            results[name] = {
+                "BS": (sum(vals) / len(vals)) if vals else None,
+                "날짜수": len(perm_preds), "순열수": n_perm,
+                "순열별_BS": [round(b, 6) for b in vals],
+                "정의": "mean_π (p_π − y)²  = BS(C2) + Var_π(p_π). "
+                        "'확률을 평균한 뒤 채점'(= C2와 항등)이 아니다.",
+            }
+        else:
+            results[name] = {"BS": brier(preds, truth), "날짜수": len(preds)}
+
+    # ── 0.5 기준선과 제출 범위 ──────────────────────────────────────────
+    # 미제출이 대부분이면 점수의 상당 부분이 0.5 기본값에서 나온다.
+    # 전체 Brier만 보면 '실제 예측이 얼마나 포함된 점수인지' 알 수 없다.
+    base_preds = {d: {s: NEUTRAL for s in universe_by_date[d]} for d in per_agent_by_date}
+    baseline = brier(base_preds, truth)
+
+    submitted = {a: 0 for a in agents}
+    union_by_date, n_slots = {}, 0
+    for d, pa in per_agent_by_date.items():
+        u = universe_by_date[d]
+        n_slots += len(u) * len(agents)
+        un = set()
+        for a in agents:
+            submitted[a] += len(pa.get(a, {}))
+            un |= set(pa.get(a, {}))
+        union_by_date[d] = sorted(un)
+
+    # 공통 부분집합(하나 이상의 에이전트가 제출한 종목)에서의 조건별 점수 — **보조**
+    sub_results = {}
+    for name, kind in conds.items():
+        preds = {}
+        for d, pa in per_agent_by_date.items():
+            u = union_by_date[d]
+            if not u:
+                continue
+            if kind == "single":
+                a = name.split("_", 1)[1]
+                w = {x: (1.0 if x == a else 0.0) for x in agents}
+            elif kind == "equal":
+                w = {x: 1.0 / len(agents) for x in agents}
+            elif kind == "contest":
+                w = weights_by_date.get(d) or {x: 1.0 / len(agents) for x in agents}
+            else:
+                base = weights_by_date.get(d) or {x: 1.0 / len(agents) for x in agents}
+                ps = [combine(pp, pa, u) for pp in shuffle_assignments(base)]
+                bs = [brier({d: q}, truth) for q in ps]
+                bs = [b for b in bs if b is not None]
+                preds[d] = None
+                sub_results.setdefault(name, []).append(sum(bs) / len(bs) if bs else None)
+                continue
+            preds[d] = combine(w, pa, u)
+        if kind != "shuffle":
+            sub_results[name] = brier(preds, truth)
+    for k, v in list(sub_results.items()):
+        if isinstance(v, list):
+            vv = [x for x in v if x is not None]
+            sub_results[k] = sum(vv) / len(vv) if vv else None
 
     c2, c3 = results.get("C2_동일가중", {}).get("BS"), results.get("C3_콘테스트", {}).get("BS")
     return {
@@ -195,10 +261,29 @@ def evaluate(runs: dict, weights_by_date: dict, universe_by_date: dict,
             "미제출·기권": f"공통 종목군 U_d에서 미제출·정상기권은 {NEUTRAL}로 처리. "
                             "에이전트가 50%라고 판단했다는 뜻이 아니라 공통 처리 규칙이다.",
             "형식·실행 실패": "기권과 별도 기록. 그 때문에 조건마다 평가 종목을 빼지 않는다.",
-            "C4": "저장된 가중치의 에이전트 배정 3!=6가지(항등 포함) 전부 계산해 평균. "
+            "C4": "저장된 가중치의 에이전트 배정 3!=6가지(항등 포함)를 **각각 채점한 뒤 "
+                  "평균**한다 — mean_π(p_π−y)² = BS(C2) + Var_π(p_π). "
+                  "확률을 먼저 평균하면 C2와 항등이 되어 대조가 되지 않는다. "
                   "에이전트의 여러 종목 예측은 한 묶음으로 함께 이동.",
         },
         "결과": results,
+        "0.5_기준선": {
+            "모든 종목에 항상 0.5": round(baseline, 6) if baseline is not None else None,
+            "의미": "U_d 전체에 중립값만 낸 경우의 Brier. 미제출이 많을수록 조건별 "
+                    "점수가 이 값에 가까워진다 — 실제 예측이 얼마나 반영된 점수인지 "
+                    "판단하려면 반드시 함께 본다.",
+        },
+        "제출_범위": {
+            "에이전트별_제출_종목수": submitted,
+            "하나 이상 제출된 종목수(날짜별)": {d: len(v) for d, v in union_by_date.items()},
+            "전체 슬롯(종목×에이전트×날짜)": n_slots,
+            "제출 슬롯": sum(submitted.values()),
+        },
+        "보조_공통부분집합_점수": {
+            "설명": "하나 이상의 에이전트가 제출한 종목만으로 다시 계산한 값. "
+                    "**보조 분석이며 주평가 분모를 바꾸지 않는다.**",
+            "점수": {k: (round(v, 6) if v is not None else None) for k, v in sub_results.items()},
+        },
         "주_비교": {"BS(C3)-BS(C2)": (None if c2 is None or c3 is None else round(c3 - c2, 6)),
                     "해석": "음수면 콘테스트가 더 좋다"},
         "진단": {d: dict(v) for d, v in diag.items()},
