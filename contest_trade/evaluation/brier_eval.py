@@ -272,10 +272,18 @@ def evaluate(runs: dict, weights_by_date: dict, universe_by_date: dict,
             "의미": "U_d 전체에 중립값만 낸 경우의 Brier. 미제출이 많을수록 조건별 "
                     "점수가 이 값에 가까워진다 — 실제 예측이 얼마나 반영된 점수인지 "
                     "판단하려면 반드시 함께 본다.",
+            "⚠️ 단위 주의": "최종 평가 단위는 **(날짜, 종목) 조합**이지 "
+                            "(날짜, 종목, 에이전트) 슬롯이 아니다. '에이전트 슬롯의 "
+                            "87.5%가 미제출'과 '점수의 87.5%가 기본값'은 다른 말이다. "
+                            "전원이 미제출한 조합만 최종 확률이 정확히 0.5가 되고, "
+                            "일부만 제출한 조합에는 기권의 영향이 섞인다.",
         },
         "제출_범위": {
             "에이전트별_제출_종목수": submitted,
             "하나 이상 제출된 종목수(날짜별)": {d: len(v) for d, v in union_by_date.items()},
+            "최종 평가 단위(날짜,종목) 총수": sum(len(universe_by_date[d]) for d in union_by_date),
+            "그중 전원 미제출(확률 정확히 0.5)": (
+                sum(len(universe_by_date[d]) - len(v) for d, v in union_by_date.items())),
             "전체 슬롯(종목×에이전트×날짜)": n_slots,
             "제출 슬롯": sum(submitted.values()),
         },
