@@ -40,13 +40,13 @@ llm_judgment:
 
 ```bash
 cd contest_trade
-CONTEST_TRADE_MARKET=KR-Stock python -m backtest_runner 2026-06-15 2026-06-15
+CONTEST_TRADE_MARKET=KR-Stock python -m backtest_runner 2026-06-16 2026-06-16
 ```
 
 끝나면 이런 줄이 나온다.
 
 ```
-■ 2026-06-15 08:30:00 완료 (50s, LLM 33회, ~$0.0468)
+■ 2026-06-16 08:30:00 완료 (40s, LLM 33회, ~$0.0445)
 ```
 
 ---
@@ -59,11 +59,16 @@ CONTEST_TRADE_MARKET=KR-Stock python -m backtest_runner 2026-06-15 2026-06-15
 python - <<'PY'
 import json, re
 for a in ("agent_0", "agent_1", "agent_2"):
-    d = json.load(open(f"agents_workspace/reports/{a}/2026-06-15_08-30-00.json"))
+    d = json.load(open(f"agents_workspace/reports/{a}/2026-06-16_08-30-00.json"))
     bg = d["background_information"]
     srcs = re.findall(r"<source>(.*?)</source>", bg)
-    sigs = re.findall(r"<symbol_code>(.*?)</symbol_code>", d.get("final_result", "") or "")
-    print(f"{a}: 소스 {srcs} | 배경 {len(bg)}자 | 신호 {sigs or '기권'}")
+    fr = d.get("final_result", "") or ""
+    yes = [b for b in re.findall(r"<signal>(.*?)</signal>", fr, re.S)
+           if "<has_opportunity>yes" in b.replace(" ", "")]
+    syms = [re.search(r"<symbol_code>(.*?)</symbol_code>", b, re.S).group(1).strip()
+            for b in yes if re.search(r"<symbol_code>", b)]
+    print(f"{a}: 소스 {len(srcs)}개 | 배경 {len(bg)}자 | 신호 {syms or '없음(기권)'} "
+          f"| p_up {len(re.findall(r'<p_up>', fr))}")
 PY
 ```
 
@@ -71,7 +76,8 @@ PY
 
 - 소스 3개(`kr_dart_disclosure`, `kr_factiva_news`, `kr_telegram_research`)가 다 있는가
 - 배경 정보가 수천 자 이상인가 (수백 자면 팩터가 비었다는 뜻)
-- 신호가 나왔거나, **기권이면 `<signals></signals>`** 인가 (빈 제출은 정상이다)
+- 신호가 나왔거나 **기권**인가 — 기권은 정상이다
+- **`p_up` 개수가 신호 수와 맞는가** — 0이면 옛 프롬프트로 만든 산출물이다
 
 `final_result` 원문도 한 번 읽어 본다. 근거가 입력에 있는 내용인지 눈으로 본다.
 
@@ -80,7 +86,7 @@ PY
 ## 3. 콘테스트 가중치까지 (선택)
 
 ```bash
-CONTEST_TRADE_MARKET=KR-Stock python -m evaluation.run_contest_c3 2026-06-15 2026-06-15 08:30:00
+CONTEST_TRADE_MARKET=KR-Stock python -m evaluation.run_contest_c3 2026-06-16 2026-06-16 08:30:00
 ```
 
 학습 이력이 부족하면 `insufficient_history`로 뜨고 judge 폴백으로 동작한다.
@@ -96,6 +102,8 @@ CONTEST_TRADE_MARKET=KR-Stock python -m evaluation.run_contest_c3 2026-06-15 202
 | 배경 정보가 수백 자 | sqlite 경로 확인 |
 | `api_key` 오류 | `config_kr.yaml`의 `llm.api_key` |
 | 콘테스트가 신호 0건이라 건너뜀 | 그날 전원 기권 — 정상 |
+| **`LLM 0회`로 즉시 끝남** | 그 날짜 산출물이 이미 있어 **건너뛴 것** — 미실행 거래일을 쓸 것 |
+| `p_up`이 0개 | 옛 프롬프트로 만든 산출물 — 새 날짜로 다시 실행 |
 
 ---
 
