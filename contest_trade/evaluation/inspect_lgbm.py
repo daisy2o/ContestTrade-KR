@@ -118,17 +118,26 @@ def main():
         n_train = (meta.get("진단", {}) or {}).get("실제_구성가능_학습표본")
         ratio = (mean["분기_수"] / n_train) if n_train else None
         res["판정"] = (f"분기 {mean['분기_수']}개 · 리프 {mean['리프_수']}개로 "
-                       f"**비상수 예측을 학습했다**(상수 모델이 아니다).")
-        res["⚠️ 과적합"] = {
-            "실제 학습 표본": n_train,
-            "분기 수": mean["분기_수"],
-            "표본당 분기": round(ratio, 1) if ratio else None,
-            "판독": (f"학습 표본 {n_train}건에 분기 {mean['분기_수']}개 — "
-                     f"표본보다 분기가 {ratio:.0f}배 많다. **심한 과적합 신호**이며, "
-                     f"비상수라는 사실이 유용한 관계를 학습했다는 뜻은 아니다. "
-                     f"여기서 튜닝하지 않고 한계로 기록한다."),
-            "특징 편중": (f"보상 특징 분기 {mean.get('보상특징_분기')}개 vs "
-                          f"judge 특징 분기 {mean.get('judge특징_분기')}개"),
+                       f"**비상수 예측을 학습했다**(상수 모델이 아니다). "
+                       f"일반화 성능은 별개이며 미검증이다.")
+        rows = None
+        rp = OUT / "train_rows_check.json"
+        if rp.exists():
+            rows = json.loads(rp.read_text())
+        res["⚠️ 학습 자료 규모"] = {
+            "학습기에 전달된 행 (X.shape)": (rows or {}).get("학습_직전_X_shape"),
+            "고유 (날짜, 에이전트) 쌍": (rows or {}).get("고유_(날짜,에이전트)_쌍"),
+            "표본별 중복 횟수": (rows or {}).get("표본별_중복횟수_분포"),
+            "판독": ("학습 자료가 **63개 고유 관측에서 중복 확장된 334행**이다. "
+                     "학습 표본이 작아 **과적합 위험이 크지만**, 분기 수만으로 과적합을 "
+                     "확정할 수는 없다 — LightGBM은 여러 트리를 누적하므로 전체 분기 수를 "
+                     "표본 수로 나눈 값은 과적합 지표가 아니다. "
+                     "현재 결과는 **'중복 포함 학습 파일럿'**으로 표시한다."),
+            "특징 사용 빈도": (f"보상 관련 특징이 분기에 더 자주 사용됐다"
+                                f"(보상 {mean.get('보상특징_분기')} vs judge {mean.get('judge특징_분기')}). "
+                                f"⚠️ 분기 횟수는 **사용 빈도**이지 성능 기여가 아니며, "
+                                f"유사·중복 특징의 영향도 받는다 — 보상이 개선을 주도했다고 "
+                                f"단정할 수 없다."),
         }
     (OUT / "lgbm_inspection.json").write_text(json.dumps(res, ensure_ascii=False, indent=1))
     print(json.dumps(res, ensure_ascii=False, indent=1))
