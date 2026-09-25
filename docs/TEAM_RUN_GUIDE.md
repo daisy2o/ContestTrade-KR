@@ -13,7 +13,6 @@
 git clone <팀 저장소> && cd ContestTrade
 uv venv && source .venv/bin/activate
 uv pip install -r requirements_kr.txt
-uv pip install scikit-learn        # LightGBM 경로에 필요
 ```
 
 드라이브에서 받은 sqlite 2개를 그대로 둔다.
@@ -93,7 +92,7 @@ CONTEST_TRADE_MARKET=KR-Stock python -m evaluation.run_contest_c3 2026-06-15 202
 
 | 증상 | 원인 |
 |---|---|
-| `No module named sklearn` | `uv pip install scikit-learn` |
+| `No module named sklearn` | `requirements_kr.txt` 재설치 (scikit-learn 포함됨) |
 | 배경 정보가 수백 자 | sqlite 경로 확인 |
 | `api_key` 오류 | `config_kr.yaml`의 `llm.api_key` |
 | 콘테스트가 신호 0건이라 건너뜀 | 그날 전원 기권 — 정상 |

@@ -10,3 +10,7 @@ striprtf>=0.0.26      # Factiva RTF 파싱 (data_collection/factiva_ingest.py)
 
 # 개발·테스트용
 pytest>=8.0
+
+# LightGBM의 sklearn 인터페이스에 필요 — 없으면 콘테스트 학습 경로가
+# "scikit-learn is required for lightgbm.sklearn" 으로 실패한다.
+scikit-learn>=1.3
