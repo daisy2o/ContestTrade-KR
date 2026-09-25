@@ -1,5 +1,20 @@
 # KR 파일럿 실행 가이드 (팀원용)
 
+> ## ⚠️ 이 문서는 옛 실행 안내입니다
+>
+> **현재 실행 방법은 [`docs/TEAM_RUN_GUIDE.md`](docs/TEAM_RUN_GUIDE.md)를 따르세요.**
+>
+> 아래 내용 중 **키 설정·모델·비용 부분은 낡았습니다**:
+> - `config_kr.yaml`에 키를 직접 넣는 방식 → **환경변수**(`OPENAI_API_KEY`, `DART_API_KEY`)로 바뀜
+> - `config_kr.yaml`은 이제 **추적되지 않음** (`config_kr.example.yaml`을 복사해 사용)
+> - 최종 판단 모델이 `gpt-4.1-2025-04-14`로 분리됨 (상위 단계만 `gpt-4o-mini`)
+> - 표시 비용에 최종 판단 호출이 **빠져 있음**
+>
+> 데이터 수집·초기 셋업 배경은 참고용으로 남겨 둡니다.
+
+---
+
+
 > 목표: 각자 자기 컴퓨터에서 KR 파이프라인을 하루치 돌려보고 문제를 찾는다 (9/29 화요일 전체 실행 준비).
 
 ## 0. 준비물
@@ -51,8 +66,8 @@ universe(K-TOP30) 파일은 저장소에 포함되어 있습니다 (`data_collec
 export OPENAI_API_KEY="sk-본인키"        # Windows: set OPENAI_API_KEY=sk-본인키
 ```
 
-**방법 2 — config 편집.** 루트의 `config_kr.yaml`에서 `llm.api_key`에 본인 키 입력.
-모델은 그대로 `gpt-4o-mini` (팀 합의: 테스트는 저가 모델)
+~~**방법 2 — config 편집.** 루트의 `config_kr.yaml`에서 `llm.api_key`에 본인 키 입력.~~
+**(낡음)** 지금은 `config_kr.yaml`이 추적되지 않으며 키는 환경변수로 넣습니다.
 
 DART 키(공시 수집용)는 `data_collection/kr_secrets.yaml`에 넣습니다. 파일이 없으면:
 
@@ -65,7 +80,8 @@ dart_api_key: "본인 DART 키"
 방법 2를 쓸 경우에만, 실수 커밋 방지 잠금을 함께:
 
 ```bash
-git update-index --skip-worktree config_kr.yaml
+# (낡음) skip-worktree는 로컬 설정이라 복제되지 않습니다.
+# 지금은 config_kr.yaml 자체가 .gitignore 에 있습니다.
 ```
 
 ## 4. 실행
@@ -113,7 +129,7 @@ CONTEST_TRADE_MARKET=KR-Stock python backtest_runner.py 2026-05-29 2026-05-29
 
 | 증상 | 원인/해법 |
 |---|---|
-| `api_key가 없습니다` 중단 | config_kr.yaml의 `llm.api_key` 확인 |
+| `api_key가 없습니다` 중단 | 환경변수 `OPENAI_API_KEY` 확인 |
 | `ModuleNotFoundError` | `contest_trade/` 폴더 안에서 실행했는지, venv 활성화했는지 확인 |
 | DART 수집 0건 | `kr_secrets.yaml`의 DART 키 확인 (또는 환경변수 `DART_API_KEY`) |
 | telegram/factiva 0건 | 2번 데이터 파일 위치 확인 |
