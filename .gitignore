@@ -257,3 +257,7 @@ contest_trade/evaluation/PILOT_P1_요약.md
 contest_trade/evaluation/out/텔레그램_전달경로_점검.md
 contest_trade/evaluation/out/텔레그램_확대실험_10일.md
 contest_trade/evaluation/out/텔레그램_확대실험_10일_정리본.md
+
+# 실제 설정 — 키가 들어갈 수 있으므로 추적하지 않는다.
+# config_kr.example.yaml 을 복사해 쓸 것.
+config_kr.yaml

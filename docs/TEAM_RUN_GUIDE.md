@@ -31,14 +31,20 @@ export DART_API_KEY="..."          # 필수(공시). https://opendart.fss.or.kr 
 
 `~/.zshrc`에 넣어두면 매번 입력하지 않아도 된다.
 
-> ⚠️ **`config_kr.yaml`에 키를 직접 쓰지 말 것.** 이 파일은 **Git에 추적되고 있어**
-> 키를 넣고 커밋하면 공개된다. 코드가 환경변수를 먼저 읽으므로 YAML은 비워 둔다.
->
-> 앞선 안내에서 "`skip-worktree`라 커밋되지 않는다"고 적었는데 **틀렸다.**
-> 그건 내 컴퓨터의 로컬 설정이라 **복제되지 않는다** — 새로 받은 환경은
-> `git ls-files -v config_kr.yaml`이 `H`(보통 추적)다.
+설정 파일은 예시를 복사해서 만든다.
 
-모델 설정은 `config_kr.yaml`에 있다. 키 칸만 비워 두면 된다.
+```bash
+cp config_kr.example.yaml config_kr.yaml
+```
+
+`config_kr.yaml`은 **`.gitignore`에 있어 커밋되지 않는다.** 실수로 키가 올라갈
+경로 자체가 없다.
+
+> 이전 안내에서 "`skip-worktree`라 커밋되지 않는다"고 적었는데 **틀렸었다.**
+> 그건 로컬 설정이라 복제되지 않아, 새로 받은 환경에서는 보호가 없었다.
+> 지금은 추적 자체를 해제했다.
+
+모델 설정은 `config_kr.example.yaml`에 있다. 키 칸은 비워 둔다.
 
 ```yaml
 llm:
