@@ -34,8 +34,9 @@
 - 무결성 확인용 SHA-256 앞 16자:
   `fc2ffc802c91692b…` telegram · `1ca06ab5214b587c…` factiva
 - 받은 파일은 위 경로 그대로 두면 코드가 찾는다.
-- OpenAI / OpenRouter 키는 각자 발급해 `config_kr.yaml`(로컬)에 넣는다.
-  이 파일은 `skip-worktree`라 커밋되지 않는다 — **키를 커밋하지 말 것**.
+- 키는 **환경변수**로 넣는다: `OPENAI_API_KEY`, `DART_API_KEY`.
+  ⚠️ `config_kr.yaml`에 키를 쓰지 말 것 — **Git에 추적되는 파일**이다.
+  (내 컴퓨터에서는 `skip-worktree`로 막아 뒀지만 그 설정은 복제되지 않는다.)
 
 ---
 
