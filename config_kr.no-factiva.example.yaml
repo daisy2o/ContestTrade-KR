@@ -1,0 +1,85 @@
+# 설정 예시 (Factiva 제외) — 실행 확인용.
+#
+# Factiva 뉴스 소스를 뺀 구성입니다. 텔레그램 + DART 공시 + 가격으로 돕니다.
+# ⚠️ 이 설정의 출력은 **공통 결과와 다릅니다.** 환경이 제대로 깔렸는지
+#    확인하는 용도이고, 결과 비교에는 쓰지 마세요.
+#
+# 이 파일을 config_kr.yaml 로 복사해서 쓴다.
+# ⚠️ 키는 여기 쓰지 말고 **환경변수**로 넣는다:
+#      export OPENAI_API_KEY="sk-..."
+#      export DART_API_KEY="..."
+#    config_kr.yaml 은 .gitignore 에 있어 커밋되지 않는다.
+
+# ContestTrade KR (KOSPI) configuration — 팀 규칙 2: API 키는 이 파일의 로컬 사본에만.
+# 이 저장소 버전은 키가 빈 템플릿이다. 키를 넣은 채 커밋 금지.
+
+tushare_key: ""
+bocha_key: ""
+serp_key: ""
+fmp_key: ""
+finnhub_key: ""
+alpha_vantage_key: ""
+polygon_key: ""
+
+# LLM: OpenAI 호환. 미팅 결정대로 테스트는 gpt-4o-mini 등 저가 모델로.
+llm:
+  provider: "openai"
+  base_url: "https://api.openai.com/v1"
+  api_key: ""   # YOUR_OPENAI_API_KEY (US E2E 실행에 쓴 팀 키 재사용)
+  model_name: "gpt-4o-mini"
+
+# 최종 판단 전용 (D64, 2026-09-24). 종목·방향·근거를 생성하는 단계만 이 모델을 쓴다.
+# 팩터 요약·계획·도구 선택은 위 llm을 그대로 유지 — 동시에 바꾸면 무엇이
+# 달라졌는지 구분할 수 없다. 버전은 스냅샷으로 고정한다.
+llm_judgment:
+  provider: "openai"
+  base_url: "https://api.openai.com/v1"
+  api_key: ""        # 비우면 llm.api_key를 쓴다
+  model_name: "gpt-4.1-2025-04-14"
+
+llm_thinking:
+  provider: "openai"
+  base_url: "https://api.openai.com/v1"
+  api_key: ""
+  model_name: ""
+
+vlm:
+  provider: "openai"
+  base_url: ""
+  api_key: ""
+  model_name: ""
+
+# KR 데이터 에이전트 — 1단계: 공시(D1) + 뉴스(D6, Factiva) + 리서치 코멘트(D9, 텔레그램)
+data_agents_config:
+  - agent_name: "kr_dart_disclosure"
+    data_source_list:
+      - "data_source.kr_dart_disclosure.KrDartDisclosure"
+  # Factiva는 유료 구독 데이터라 배포하지 않습니다 — 이 설정에서는 제외합니다.
+  # 본인 구독으로 직접 수집하려면 data_collection/factiva_ingest.py 를 쓰고
+  # 위 config_kr.example.yaml 의 kr_factiva_news 항목을 되살리세요.
+  - agent_name: "kr_telegram_research"
+    data_source_list:
+      - "data_source.kr_telegram_research.KrTelegramResearch"
+
+# KR 리서치 에이전트 — belief 초안 3종(R1 이벤트드리븐 / R2 애널추종 / R3 가격·수급)
+research_agent_config:
+  belief_list_path: "config/belief_list_kr.json"
+  max_react_step: 10
+  output_language: "Korean"
+  tools:
+    - "tools.stock_symbol_search_kr.stock_symbol_search"
+    - "tools.price_info_kr.price_info"
+    - "tools.stock_summary_kr.stock_summary"
+    - "tools.final_report.final_report"
+  # 주의: search_web은 백테스트 시점 무결성(과거 재생 중 현재 웹 노출) 때문에 제외 (스펙 D22)
+
+market_config_file: "config/market_config_kr.yaml"
+
+system_language: "Korean"
+
+researcher_contest_config:
+  contest_mode: False   # 기본 = 콘테스트 꺼짐(ablation baseline). C3 실행 시 True + 배선 필요
+  judger_config: llm
+  num_judgers: 3
+  window_m: 5
+  window_n: 3

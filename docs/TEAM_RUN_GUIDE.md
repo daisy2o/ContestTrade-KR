@@ -66,13 +66,34 @@ llm_judgment:
 코드는 GitHub에서 받지만 **뉴스·텔레그램 데이터는 포함돼 있지 않다.**
 별도로 받아야 하고, **모두 같은 데이터를 써야 결과를 비교할 수 있다.**
 
-`파일럿_실행데이터.zip`(약 36MB)을 받아 저장소 루트에서 푼다.
+### ⚠️ Factiva는 배포하지 않습니다
+
+Factiva는 유료 구독 데이터이고 **팀 공유 허용 범위를 확인할 수 없어** 배포하지
+않습니다. 따라서 받는 데이터는 **텔레그램만**입니다.
+
+Factiva 없이도 파이프라인은 끝까지 돕니다(실제로 확인했습니다 — 소스 2개,
+신호·`p_up` 정상 생성). 설정만 바꾸면 됩니다.
 
 ```bash
-mkdir -p data_collection/data/telegram data_collection/data/factiva
+cp config_kr.no-factiva.example.yaml config_kr.yaml
+```
+
+> ⚠️ **이 설정의 출력은 공통 결과와 다릅니다.** 뉴스가 빠져 배경 정보가 절반쯤
+> 줄어듭니다(약 7,000자 → 3,500자). **환경이 제대로 깔렸는지 확인하는 용도**이고,
+> 결과 비교에는 쓰지 마세요. **공통 결과는 제가 Factiva 포함으로 한 번 생성해
+> 공유합니다.**
+>
+> 본인 Factiva 구독이 있으면 `data_collection/factiva_ingest.py`로 직접 수집한 뒤
+> `config_kr.example.yaml`(Factiva 포함)을 쓰시면 됩니다.
+
+---
+
+`파일럿_실행데이터.zip`(텔레그램만, 약 26MB)을 받아 저장소 루트에서 푼다.
+
+```bash
+mkdir -p data_collection/data/telegram
 unzip -o ~/Downloads/파일럿_실행데이터.zip -d /tmp/pilotdata
 mv /tmp/pilotdata/telegram_research.sqlite data_collection/data/telegram/
-mv /tmp/pilotdata/factiva_news.sqlite      data_collection/data/factiva/
 ```
 
 같은 파일인지 확인:
@@ -129,8 +150,8 @@ PY
 
 **확인할 것**
 
-- 소스 3개(`kr_dart_disclosure`, `kr_factiva_news`, `kr_telegram_research`)가 다 있는가
-- 배경 정보가 수천 자 이상인가 (수백 자면 팩터가 비었다는 뜻)
+- 소스가 **2개**(`kr_dart_disclosure`, `kr_telegram_research`) 나오는가 — Factiva 제외 설정이므로 정상
+- 배경 정보가 **3,000자 이상**인가 (수백 자면 팩터가 비었다는 뜻)
 - 신호가 나왔거나 **기권**인가 — 기권은 정상이다
 - **`p_up` 개수가 신호 수와 맞는가** — 0이면 옛 프롬프트로 만든 산출물이다
 
@@ -171,6 +192,8 @@ PY
 | DART 관련 오류 | `DART_API_KEY` 미설정 |
 | `api_key` 오류 | `OPENAI_API_KEY` 미설정 |
 | 배경 정보가 수백 자 | sqlite가 위 경로에 없음 |
+| `Factiva DB가 없습니다` | `config_kr.no-factiva.example.yaml` 을 쓰지 않았음 |
+| `Error parsing single signal block` | 기권 블록 파싱 경고 — **정상 동작**, 무시해도 됨 |
 | **`LLM 0회`로 즉시 끝남** | 그 날짜 산출물이 이미 있어 **건너뛴 것** |
 | `p_up`이 0개 | 옛 프롬프트로 만든 산출물 — 새 날짜로 실행 |
 
