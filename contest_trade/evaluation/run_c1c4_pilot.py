@@ -110,13 +110,23 @@ async def main(dates: list, reps: int, regenerate: bool):
         print(f"   정답 확보 {len(y)}/{len(UNIVERSE)}종목 | 제외 {len(ex.get('제외', []))}건")
 
     # C3 가중치 — 저장분. 산출 방식(method)을 함께 들고 온다.
-    wpath = OUT / "c3_weights_pilot.json"
+    wpath = OUT / ("c3_weights_minpilot.json"
+                   if (OUT / "c3_weights_minpilot.json").exists() and
+                   set(dates) <= set(json.loads((OUT / "c3_weights_minpilot.json").read_text()))
+                   else "c3_weights_pilot.json")
     wraw = json.loads(wpath.read_text()) if wpath.exists() else {}
     weights, methods = {}, {}
     for date in dates:
         v = wraw.get(date) or {}
-        if v.get("weights"):
-            weights[date] = v["weights"]
+        w = v.get("weights")
+        if w and abs(sum(w.values())) > 1e-9:
+            weights[date] = w
+        elif w:
+            # 전 에이전트 가중치 0 = 콘테스트가 그날 기권했다는 뜻.
+            # 합이 0이면 확률 합성이 정의되지 않으므로 **동일가중 대체**를 쓰고
+            # 그 사실을 기록한다(임의로 날짜를 빼지 않는다).
+            weights[date] = {k: 1.0 / len(w) for k in w}
+            methods[date] = (v.get("method", "")) + " + 전원0가중(기권일)→동일가중 대체"
         methods[date] = v.get("method", "미상")
 
     res = evaluate(runs, weights, {d: UNIVERSE for d in dates}, truth)

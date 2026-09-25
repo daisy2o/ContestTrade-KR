@@ -229,18 +229,30 @@ class ResearchContest:
                     n_injected += 1
             print(f"   judge 특징 주입: {n_injected}건 (미보유 {n_missing}건)")
 
-            # 유효 (특징, 보상) 쌍을 센다 — 파일 수가 아니다
+            # 유효 (특징, 보상) 쌍을 센다 — 파일 수가 아니다.
+            # ⚠️ 계산한 보상을 **contest_data에 다시 써넣어야** 한다.
+            #    has_contest_data()가 'reward' 키를 요구하므로, judge_scores만 넣으면
+            #    학습기가 그 신호를 '평가 데이터 없음'으로 보고 건너뛴다.
             pairs = []
             for agent_name, signals in training_data.items():
                 for sig in signals:
-                    r = None
-                    if getattr(sig, "contest_data", None):
-                        r = sig.contest_data.get("reward")
-                    if r is None:
-                        try:
-                            r = await self.data_manager.calculate_signal_reward(sig)
-                        except Exception:
+                    cd = dict(getattr(sig, "contest_data", None) or {})
+                    r = cd.get("reward")
+                    if "reward" not in cd:
+                        ho = (getattr(sig, "has_opportunity", "") or "").strip().lower()
+                        if ho != "yes":
+                            # 정상 기권 — 보상 미정의. 임의값을 넣지 않는다.
                             r = None
+                            cd["evaluation_method"] = "abstained_no_reward"
+                        else:
+                            try:
+                                r = await self.data_manager.calculate_signal_reward(sig)
+                                cd["evaluation_method"] = "market_return"
+                            except Exception:
+                                r = None
+                                cd["evaluation_method"] = "reward_unavailable"
+                        cd["reward"] = r
+                        sig.contest_data = cd
                     pairs.append((sig, r))
             diag = TA.summarize(pairs)
 
