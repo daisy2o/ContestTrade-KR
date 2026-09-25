@@ -15,12 +15,31 @@ uv venv && source .venv/bin/activate
 uv pip install -r requirements_kr.txt
 ```
 
-드라이브에서 받은 sqlite 2개를 그대로 둔다.
+### 실행 데이터 받기
 
+코드는 GitHub에서 받지만 **뉴스·텔레그램 데이터는 포함돼 있지 않다.**
+별도로 받아야 하고, **모두 같은 데이터를 써야 결과를 비교할 수 있다.**
+
+`파일럿_실행데이터.zip`(약 36MB)을 받아 저장소 루트에서 풀면 끝이다.
+
+```bash
+mkdir -p data_collection/data/telegram data_collection/data/factiva
+unzip -o ~/Downloads/파일럿_실행데이터.zip -d /tmp/pilotdata
+mv /tmp/pilotdata/telegram_research.sqlite data_collection/data/telegram/
+mv /tmp/pilotdata/factiva_news.sqlite      data_collection/data/factiva/
 ```
-data_collection/data/telegram/telegram_research.sqlite
-data_collection/data/factiva/factiva_news.sqlite
+
+확인:
+
+```bash
+ls -lh data_collection/data/telegram/telegram_research.sqlite \
+       data_collection/data/factiva/factiva_news.sqlite
+# 각각 약 93MB, 29MB
 ```
+
+> SQLite를 직접 다루거나 내부 구조를 알 필요는 없다. 파일만 제자리에 있으면 된다.
+> 팀 공용 클라우드에서 함께 실행한다면 공용 경로에 한 번 두고 같이 쓰면 되고,
+> 이 압축 배포는 필요 없다.
 
 `config_kr.yaml`에 **본인 OpenAI 키**를 넣는다. 이 파일은 `skip-worktree`라
 커밋되지 않는다 — 키를 커밋하지 말 것.
@@ -99,7 +118,7 @@ CONTEST_TRADE_MARKET=KR-Stock python -m evaluation.run_contest_c3 2026-06-16 202
 | 증상 | 원인 |
 |---|---|
 | `No module named sklearn` | `requirements_kr.txt` 재설치 (scikit-learn 포함됨) |
-| 배경 정보가 수백 자 | sqlite 경로 확인 |
+| 배경 정보가 수백 자 | sqlite가 위 경로에 없음 — 데이터 받기 단계 확인 |
 | `api_key` 오류 | `config_kr.yaml`의 `llm.api_key` |
 | 콘테스트가 신호 0건이라 건너뜀 | 그날 전원 기권 — 정상 |
 | **`LLM 0회`로 즉시 끝남** | 그 날짜 산출물이 이미 있어 **건너뛴 것** — 미실행 거래일을 쓸 것 |
