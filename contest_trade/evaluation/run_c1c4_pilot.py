@@ -115,18 +115,21 @@ async def main(dates: list, reps: int, regenerate: bool):
                    set(dates) <= set(json.loads((OUT / "c3_weights_minpilot.json").read_text()))
                    else "c3_weights_pilot.json")
     wraw = json.loads(wpath.read_text()) if wpath.exists() else {}
-    weights, methods = {}, {}
+    weights, methods, substituted = {}, {}, []
     for date in dates:
         v = wraw.get(date) or {}
         w = v.get("weights")
         if w and abs(sum(w.values())) > 1e-9:
             weights[date] = w
         elif w:
-            # 전 에이전트 가중치 0 = 콘테스트가 그날 기권했다는 뜻.
-            # 합이 0이면 확률 합성이 정의되지 않으므로 **동일가중 대체**를 쓰고
-            # 그 사실을 기록한다(임의로 날짜를 빼지 않는다).
+            # 전원 0가중 — 가중치 합이 1이어야 하는 확률 합성이 **정의되지 않는다**.
+            # 동일가중으로 대체하고 그 사실을 기록한다(날짜를 임의로 빼지 않는다).
+            # ⚠️ 이것을 곧바로 '기권'이라 부르지 않는다. 모델 점수를 0으로 자른
+            #    max(0,û) 규칙에서 생긴 결과일 수 있고, **동일가중 예측을 내는 것과
+            #    거래에서 현금으로 기권하는 것은 다르다**.
             weights[date] = {k: 1.0 / len(w) for k in w}
-            methods[date] = (v.get("method", "")) + " + 전원0가중(기권일)→동일가중 대체"
+            methods[date] = (v.get("method", "")) + " + 전원0가중 → 동일가중 대체"
+            substituted.append(date)
         methods[date] = v.get("method", "미상")
 
     res = evaluate(runs, weights, {d: UNIVERSE for d in dates}, truth)
@@ -138,6 +141,19 @@ async def main(dates: list, reps: int, regenerate: bool):
     if agg == "judge_fallback" and "C3_콘테스트" in res["결과"]:
         res["결과"]["C3-judge"] = res["결과"].pop("C3_콘테스트")
         res["주_비교"]["이름"] = "BS(C3-judge) − BS(C2)"
+    res["C3_적용_방식"] = {
+        "이름": ("C3: LightGBM 기반 가중 + 전원 0가중 시 동일가중 대체"
+                 if substituted else "C3: LightGBM 기반 가중"),
+        "날짜별": {d: methods.get(d) for d in dates},
+        "동일가중_대체_날짜": substituted,
+        "⚠️ 전원 0가중의 해석": "가중치 합이 0이면 확률 합성이 정의되지 않는다. "
+                                "이를 곧바로 '기권'이라 부르지 않는다 — max(0,û) 절단에서 "
+                                "생긴 결과일 수 있고, **동일가중 예측을 내는 것과 거래에서 "
+                                "현금으로 기권하는 것은 다르다**.",
+        "C4_동일규칙_적용": ("예 — C4는 weights_by_date의 **대체 후** 값을 받아 "
+                             "순열을 만든다. 대체 날짜에서는 6가지 순열이 모두 "
+                             "동일가중이 되어 그 날의 분산은 0이다."),
+    }
     res["실행_상태"] = {
         "training_status": ("insufficient_history"
                             if any(m == "insufficient_history" for m in methods.values())
