@@ -36,7 +36,8 @@ class ProviderType(Enum):
 class LLMModelConfig:
     def __init__(self, provider: str, model_name: str, api_key: str = None, base_url: str = None,
                  max_retries: int = 3, retry_delay: float = 20.0, timeout: float = 60.0, 
-                 extra_headers: dict = None, proxys: dict = None, **kwargs):
+                 extra_headers: dict = None, proxys: dict = None,
+                 temperature: float = 0.7, **kwargs):
         self.provider = provider
         self.model_name = model_name
         self.api_key = api_key
@@ -44,6 +45,10 @@ class LLMModelConfig:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.timeout = timeout
+        # 샘플링 온도는 **실험 조건**이다 — 같은 입력에서도 실행마다 결과가 달라지는
+        # 정도에 영향을 준다. 설정 파일로 고정해 조건 지문(replay_id)에 들어가게 한다.
+        # 호출부가 temperature 를 넘기지 않으면 이 값을 쓴다(기본 0.7 = 기존 동작).
+        self.temperature = temperature
         self.extra_headers = extra_headers
         self.proxys = proxys
         # Store additional provider-specific configuration
@@ -411,7 +416,7 @@ class LLMModel(BaseAgentModel):
     async def a_run_with_semaphore(
         self,
         messages: List[Dict[str, str]],
-        temperature: float = 0.7,
+        temperature: Optional[float] = None,   # None → 설정(config.temperature)
         max_tokens: Optional[int] = None,
         max_retries: Optional[int] = None,
         retry_delay: Optional[float] = None,
@@ -445,7 +450,7 @@ class LLMModel(BaseAgentModel):
     async def a_run(
         self,
         messages: List[Dict[str, str]],
-        temperature: float = 0.7,
+        temperature: Optional[float] = None,   # None → 설정(config.temperature)
         max_tokens: Optional[int] = None,
         verbose: bool = False,
         max_retries: Optional[int] = None,
@@ -476,6 +481,8 @@ class LLMModel(BaseAgentModel):
             max_retries = getattr(self, 'config', LLMModelConfig("", "", "")).max_retries
         if retry_delay is None:
             retry_delay = getattr(self, 'config', LLMModelConfig("", "", "")).retry_delay
+        if temperature is None:
+            temperature = getattr(self, 'config', LLMModelConfig("", "", "")).temperature
         if timeout is None:
             timeout = 60
 
@@ -532,7 +539,7 @@ class LLMModel(BaseAgentModel):
     async def a_stream_run(
         self,
         messages: List[Dict[str, str]],
-        temperature: float = 0.7,
+        temperature: Optional[float] = None,   # None → 설정(config.temperature)
         max_tokens: Optional[int] = None,
         max_retries: Optional[int] = None,
         retry_delay: Optional[float] = None,
@@ -604,7 +611,7 @@ class LLMModel(BaseAgentModel):
     async def _internal_a_stream_run(
         self,
         messages: List[Dict[str, str]],
-        temperature: float = 0.7,
+        temperature: Optional[float] = None,   # None → 설정(config.temperature)
         max_tokens: Optional[int] = None,
         **kwargs
     ) -> AsyncResponseStream[str]:
@@ -678,7 +685,8 @@ GLOBAL_LLM_CONFIG = LLMModelConfig(
     provider=llm_provider,
     model_name=cfg.llm["model_name"],
     api_key=cfg.llm.get("api_key"),
-    base_url=cfg.llm.get("base_url")
+    base_url=cfg.llm.get("base_url"),
+    temperature=float(cfg.llm.get("temperature", 0.7)),
 )
 GLOBAL_LLM = LLMModel(GLOBAL_LLM_CONFIG)
 
@@ -695,9 +703,11 @@ try:
         model_name=_j["model_name"],
         api_key=_j.get("api_key") or cfg.llm.get("api_key"),
         base_url=_j.get("base_url") or cfg.llm.get("base_url"),
+        temperature=float(_j.get("temperature", cfg.llm.get("temperature", 0.7))),
     )
     GLOBAL_JUDGMENT_LLM = LLMModel(GLOBAL_JUDGMENT_LLM_CONFIG)
-    print(f"[판단 모델] 최종 판단 단계: {_j['model_name']} (그 외 단계: {cfg.llm['model_name']})")
+    print(f"[판단 모델] 최종 판단 단계: {_j['model_name']} (그 외 단계: {cfg.llm['model_name']})"
+          f" | temperature 판단={GLOBAL_JUDGMENT_LLM_CONFIG.temperature} 상위={GLOBAL_LLM_CONFIG.temperature}")
 except Exception as e:
     print(f"[판단 모델] llm_judgment 미설정 — 최종 판단도 {cfg.llm['model_name']} 사용 ({e})")
     GLOBAL_JUDGMENT_LLM = GLOBAL_LLM

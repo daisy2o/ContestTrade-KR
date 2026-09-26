@@ -118,7 +118,7 @@ class ContestEvaluator:
 """
             
             messages = [{"role": "user", "content": prompt}]
-            response = await self.llm.a_run(messages, temperature=0.7)
+            response = await self.llm.a_run(messages)
             response_content = response.content.strip()
             
             # 解析结果
@@ -202,7 +202,7 @@ class ContestEvaluator:
 """
             
             messages = [{"role": "user", "content": prompt}]
-            response = await self.llm.a_run(messages, temperature=0.7)
+            response = await self.llm.a_run(messages)
             response_content = response.content.strip()
             
             # 解析mentions
@@ -317,7 +317,7 @@ class ContestEvaluator:
 """
             
             messages = [{"role": "user", "content": prompt}]
-            response = await self.llm.a_run(messages, temperature=0.7)
+            response = await self.llm.a_run(messages)
             response_content = response.content.strip()
             
             # 解析评分结果
